@@ -19,6 +19,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(() => sendResponse({ status: 'done' }))
       .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
     return true;
+  } else if (request?.action === 'SAVE_SESSION') {
+    saveSession()
+      .then(() => sendResponse({ status: 'done' }))
+      .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
+    return true;
   }
 });
 
@@ -176,4 +181,25 @@ async function sleepInactive() {
       }
     }
   }
+}
+
+async function saveSession() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const tabsToSave = tabs.filter(t => !t.pinned && !t.url.startsWith('chrome://'));
+  
+  const sessionData = {
+    date: new Date().toISOString(),
+    tabs: tabsToSave.map(t => ({ title: t.title, url: t.url }))
+  };
+
+  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
+  savedSessions.unshift(sessionData);
+  
+  await chrome.storage.local.set({ savedSessions });
+  
+  // Close the saved tabs
+  await chrome.tabs.remove(tabsToSave.map(t => t.id));
+  
+  // Open the session viewer page
+  await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
 }

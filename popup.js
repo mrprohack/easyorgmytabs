@@ -2,7 +2,8 @@ const btnDate = document.getElementById('btn-date');
 const btnWebsite = document.getElementById('btn-website');
 const btnDedupe = document.getElementById('btn-dedupe');
 const btnSleep = document.getElementById('btn-sleep');
-const buttons = [btnDate, btnWebsite, btnDedupe, btnSleep].filter(Boolean);
+const btnSession = document.getElementById('btn-session');
+const buttons = [btnDate, btnWebsite, btnDedupe, btnSleep, btnSession].filter(Boolean);
 
 async function triggerAction(action) {
   buttons.forEach(b => b.disabled = true);
@@ -29,4 +30,8 @@ if (btnDedupe) {
 
 if (btnSleep) {
   btnSleep.addEventListener('click', () => triggerAction('SLEEP_INACTIVE'));
+}
+
+if (btnSession) {
+  btnSession.addEventListener('click', () => triggerAction('SAVE_SESSION'));
 }

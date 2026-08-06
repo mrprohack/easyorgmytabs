@@ -5,7 +5,8 @@
   "description": "Beautifully organize your tabs by date or website.",
   "permissions": [
     "tabs",
-    "tabGroups"
+    "tabGroups",
+    "storage"
   ],
   "icons": {
     "128": "icon.png"
