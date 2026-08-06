@@ -1,6 +1,7 @@
 const btnDate = document.getElementById('btn-date');
 const btnWebsite = document.getElementById('btn-website');
-const buttons = [btnDate, btnWebsite].filter(Boolean);
+const btnDedupe = document.getElementById('btn-dedupe');
+const buttons = [btnDate, btnWebsite, btnDedupe].filter(Boolean);
 
 async function triggerAction(action) {
   buttons.forEach(b => b.disabled = true);
@@ -19,4 +20,8 @@ if (btnDate) {
 
 if (btnWebsite) {
   btnWebsite.addEventListener('click', () => triggerAction('ARRANGE_BY_WEBSITE'));
+}
+
+if (btnDedupe) {
+  btnDedupe.addEventListener('click', () => triggerAction('CLOSE_DUPLICATES'));
 }

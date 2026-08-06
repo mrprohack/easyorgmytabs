@@ -9,6 +9,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(() => sendResponse({ status: 'done' }))
       .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
     return true;
+  } else if (request?.action === 'CLOSE_DUPLICATES') {
+    closeDuplicates()
+      .then(() => sendResponse({ status: 'done' }))
+      .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
+    return true;
   }
 });
 
@@ -129,3 +134,20 @@ async function arrangeByDate() {
   }
 }
 
+async function closeDuplicates() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const seenUrls = new Set();
+  const tabsToRemove = [];
+
+  for (const tab of tabs) {
+    if (seenUrls.has(tab.url)) {
+      tabsToRemove.push(tab.id);
+    } else {
+      seenUrls.add(tab.url);
+    }
+  }
+
+  if (tabsToRemove.length > 0) {
+    await chrome.tabs.remove(tabsToRemove);
+  }
+}
