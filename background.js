@@ -11,7 +11,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function ungroupAllTabs() {
   const tabs = await chrome.tabs.query({});
-  const tabIds = tabs.map(t => t.id).filter(id => id !== undefined);
+  const tabIds = tabs.filter(t => t.id !== undefined && !t.pinned).map(t => t.id);
   if (tabIds.length > 0) {
     try {
       await chrome.tabs.ungroup(tabIds);
@@ -36,6 +36,7 @@ async function arrangeByWebsite() {
   
   const windowGroups = {};
   for (const tab of tabs) {
+    if (tab.pinned) continue; // Pinned tabs cannot be grouped in Chrome
     if (!windowGroups[tab.windowId]) windowGroups[tab.windowId] = {};
     const domain = getDomain(tab.url);
     if (!windowGroups[tab.windowId][domain]) windowGroups[tab.windowId][domain] = [];
@@ -48,13 +49,17 @@ async function arrangeByWebsite() {
     let colorIndex = 0;
     for (const [domain, tabIds] of Object.entries(domainGroups)) {
       if (tabIds.length > 0) {
-        const groupId = await chrome.tabs.group({ tabIds });
-        await chrome.tabGroups.update(groupId, { 
-          title: domain, 
-          collapsed: true,
-          color: colors[colorIndex % colors.length] 
-        });
-        colorIndex++;
+        try {
+          const groupId = await chrome.tabs.group({ tabIds });
+          await chrome.tabGroups.update(groupId, { 
+            title: domain, 
+            collapsed: true,
+            color: colors[colorIndex % colors.length] 
+          });
+          colorIndex++;
+        } catch (e) {
+          console.error(`Failed to group tabs for domain ${domain}:`, e);
+        }
       }
     }
   }
