@@ -14,6 +14,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(() => sendResponse({ status: 'done' }))
       .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
     return true;
+  } else if (request?.action === 'SLEEP_INACTIVE') {
+    sleepInactive()
+      .then(() => sendResponse({ status: 'done' }))
+      .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
+    return true;
   }
 });
 
@@ -149,5 +154,26 @@ async function closeDuplicates() {
 
   if (tabsToRemove.length > 0) {
     await chrome.tabs.remove(tabsToRemove);
+  }
+}
+
+async function sleepInactive() {
+  const tabs = await chrome.tabs.query({ active: false, discarded: false });
+  const now = new Date().getTime();
+  
+  for (const tab of tabs) {
+    if (tab.audible || tab.pinned) continue; // Don't sleep playing media or pinned tabs
+    
+    const lastAccessed = tab.lastAccessed ? new Date(tab.lastAccessed).getTime() : now;
+    const diffHours = (now - lastAccessed) / (1000 * 60 * 60);
+    
+    // Discard tabs not accessed in the last 1 hour
+    if (diffHours > 1) {
+      try {
+        await chrome.tabs.discard(tab.id);
+      } catch (e) {
+        console.error("Failed to discard tab:", e);
+      }
+    }
   }
 }
