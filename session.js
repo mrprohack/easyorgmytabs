@@ -1,105 +1,182 @@
-async function loadSessions() {
-  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
-  const container = document.getElementById('sessions-container');
-  
-  if (savedSessions.length === 0) {
-    container.innerHTML = '<div class="empty-state">No saved sessions yet.</div>';
+const container = document.getElementById('sessions-container');
+const searchInput = document.getElementById('search');
+
+let sessions = [];
+
+// Saved titles and URLs come from arbitrary pages, so they are only ever set as
+// text or as a validated href — never interpolated into markup.
+function isLinkable(url) {
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol);
+  } catch (e) {
+    return false;
+  }
+}
+
+function faviconUrl(pageUrl) {
+  const url = new URL(chrome.runtime.getURL('/_favicon/'));
+  url.searchParams.set('pageUrl', pageUrl);
+  url.searchParams.set('size', '32');
+  return url.href;
+}
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter(Boolean));
+  return node;
+}
+
+// `path` is always a constant from this file, never user data.
+function icon(path) {
+  const wrapper = document.createElement('span');
+  wrapper.innerHTML =
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+  return wrapper.firstElementChild;
+}
+
+const ICONS = {
+  restore: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  trash: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
+  close: 'M6 18L18 6M6 6l12 12',
+  plus: 'M12 4v16m8-8H4'
+};
+
+async function persist() {
+  await chrome.storage.local.set({ savedSessions: sessions });
+  render();
+}
+
+// Chrome serves a generic globe for pages it has no favicon for, but the request
+// still fails for unindexed or non-http URLs — fall back to an initial so the row
+// keeps its alignment instead of losing the icon entirely.
+function faviconFallback(pageUrl) {
+  let initial = '?';
+  try {
+    initial = (new URL(pageUrl).hostname.replace(/^www\./, '')[0] || '?').toUpperCase();
+  } catch (e) {
+    // keep '?'
+  }
+  return el('span', { className: 'favicon favicon-fallback', textContent: initial });
+}
+
+function linkRow(session, tab) {
+  const favicon = el('img', { className: 'favicon', src: faviconUrl(tab.url), alt: '', loading: 'lazy' });
+  favicon.addEventListener('error', () => favicon.replaceWith(faviconFallback(tab.url)), { once: true });
+
+  const link = el('a', {
+    className: 'link',
+    textContent: tab.title || tab.url,
+    title: tab.url,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  if (isLinkable(tab.url)) link.href = tab.url;
+
+  const remove = el('button', { className: 'delete-link-btn', title: 'Remove tab' }, icon(ICONS.close));
+  remove.addEventListener('click', async () => {
+    const index = session.tabs.indexOf(tab);
+    if (index > -1) session.tabs.splice(index, 1);
+    if (session.tabs.length === 0) sessions.splice(sessions.indexOf(session), 1);
+    await persist();
+  });
+
+  return el('div', { className: 'link-row' }, favicon, link, remove);
+}
+
+function addLinkForm(session) {
+  const input = el('input', { type: 'url', required: true, className: 'input', placeholder: 'Paste URL…' });
+
+  const form = el('form', { className: 'add-link-form' },
+    input,
+    el('button', { type: 'submit', className: 'btn add-link-btn', title: 'Add tab' }, icon(ICONS.plus))
+  );
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = input.value.trim();
+    if (!isLinkable(url)) {
+      input.setCustomValidity('Enter an http:// or https:// URL');
+      input.reportValidity();
+      input.setCustomValidity(''); // the bubble stays up; don't leave the field stuck invalid
+      return;
+    }
+    session.tabs.push({ title: new URL(url).hostname, url });
+    await persist();
+  });
+
+  return form;
+}
+
+function sessionCard(session, visibleTabs) {
+  const restore = el('button', { className: 'btn' }, icon(ICONS.restore), 'Restore');
+  restore.addEventListener('click', () => {
+    const urls = session.tabs.map(t => t.url).filter(isLinkable);
+    if (urls.length) chrome.windows.create({ url: urls });
+  });
+
+  // Inline two-step confirm instead of a browser dialog.
+  const removeLabel = el('span', { textContent: 'Delete' });
+  const remove = el('button', { className: 'btn btn-danger' }, icon(ICONS.trash), removeLabel);
+  let armed = false;
+  remove.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true;
+      removeLabel.textContent = 'Confirm?';
+      remove.classList.add('armed');
+      setTimeout(() => {
+        armed = false;
+        removeLabel.textContent = 'Delete';
+        remove.classList.remove('armed');
+      }, 3000);
+      return;
+    }
+    sessions.splice(sessions.indexOf(session), 1);
+    await persist();
+  });
+
+  const count = session.tabs.length;
+  return el('div', { className: 'session' },
+    el('h2', {
+      textContent: new Date(session.date).toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    }),
+    el('p', { className: 'meta', textContent: `${count} tab${count === 1 ? '' : 's'}` }),
+    el('div', { className: 'btn-row' }, restore, remove),
+    el('div', { className: 'links-list' }, ...visibleTabs.map(tab => linkRow(session, tab))),
+    addLinkForm(session)
+  );
+}
+
+function render() {
+  const query = searchInput.value.trim().toLowerCase();
+  container.textContent = '';
+
+  const visible = sessions
+    .map(session => ({
+      session,
+      tabs: query
+        ? session.tabs.filter(t => `${t.title} ${t.url}`.toLowerCase().includes(query))
+        : session.tabs
+    }))
+    .filter(entry => !query || entry.tabs.length > 0);
+
+  if (visible.length === 0) {
+    container.append(el('div', {
+      className: 'empty-state',
+      textContent: query ? 'No saved tabs match that search.' : 'No saved sessions yet.'
+    }));
     return;
   }
 
-  container.innerHTML = savedSessions.map((session, sIndex) => `
-    <div class="session">
-      <h2>${new Date(session.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</h2>
-      
-      <div class="btn-row">
-        <button class="btn restore-btn" data-sindex="${sIndex}">
-          <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          Restore
-        </button>
-        <button class="btn btn-danger delete-session-btn" data-sindex="${sIndex}">
-          <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          Delete
-        </button>
-      </div>
-      
-      <div class="links-list">
-        ${session.tabs.map((tab, tIndex) => `
-          <div class="link-row">
-            <a class="link" href="${tab.url}" target="_blank" title="${tab.title}">${tab.title}</a>
-            <button class="delete-link-btn" data-sindex="${sIndex}" data-tindex="${tIndex}" title="Remove tab">
-              <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-          </div>
-        `).join('')}
-      </div>
-
-      <form class="add-link-form" data-sindex="${sIndex}">
-        <input type="url" required class="add-link-input" placeholder="Paste URL..." />
-        <button type="submit" class="btn add-link-btn">
-          <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-        </button>
-      </form>
-    </div>
-  `).join('');
-
-  attachEventListeners(savedSessions);
+  for (const { session, tabs } of visible) {
+    container.append(sessionCard(session, tabs));
+  }
 }
 
-function attachEventListeners(savedSessions) {
-  // Restore Session
-  document.querySelectorAll('.restore-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const sIndex = e.currentTarget.getAttribute('data-sindex');
-      for (const tab of savedSessions[sIndex].tabs) {
-        chrome.tabs.create({ url: tab.url, active: false });
-      }
-    });
-  });
+searchInput.addEventListener('input', render);
 
-  // Delete Session
-  document.querySelectorAll('.delete-session-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      if (confirm('Are you sure you want to delete this session?')) {
-        const sIndex = e.currentTarget.getAttribute('data-sindex');
-        savedSessions.splice(sIndex, 1);
-        await chrome.storage.local.set({ savedSessions });
-        loadSessions();
-      }
-    });
-  });
-
-  // Delete Link
-  document.querySelectorAll('.delete-link-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const sIndex = e.currentTarget.getAttribute('data-sindex');
-      const tIndex = e.currentTarget.getAttribute('data-tindex');
-      savedSessions[sIndex].tabs.splice(tIndex, 1);
-      
-      // If session is empty, remove it
-      if (savedSessions[sIndex].tabs.length === 0) {
-        savedSessions.splice(sIndex, 1);
-      }
-      
-      await chrome.storage.local.set({ savedSessions });
-      loadSessions();
-    });
-  });
-
-  // Add Link
-  document.querySelectorAll('.add-link-form').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const sIndex = e.currentTarget.getAttribute('data-sindex');
-      const input = e.currentTarget.querySelector('.add-link-input');
-      const url = input.value.trim();
-      
-      if (url) {
-        savedSessions[sIndex].tabs.push({ title: url, url: url });
-        await chrome.storage.local.set({ savedSessions });
-        loadSessions();
-      }
-    });
-  });
-}
-
-loadSessions();
+chrome.storage.local.get('savedSessions').then(({ savedSessions = [] }) => {
+  sessions = savedSessions;
+  render();
+});

@@ -1,37 +1,62 @@
-const btnDate = document.getElementById('btn-date');
-const btnWebsite = document.getElementById('btn-website');
-const btnDedupe = document.getElementById('btn-dedupe');
-const btnSleep = document.getElementById('btn-sleep');
-const btnSession = document.getElementById('btn-session');
-const buttons = [btnDate, btnWebsite, btnDedupe, btnSleep, btnSession].filter(Boolean);
+const ACTIONS = {
+  'btn-date': 'ARRANGE_BY_DATE',
+  'btn-website': 'ARRANGE_BY_WEBSITE',
+  'btn-dedupe': 'CLOSE_DUPLICATES',
+  'btn-sleep': 'SLEEP_INACTIVE',
+  'btn-session': 'SAVE_SESSION'
+};
+
+// [singular, plural, nothing-happened]
+const RESULT_TEXT = {
+  ARRANGE_BY_DATE: ['group', 'groups', 'Nothing to arrange.'],
+  ARRANGE_BY_WEBSITE: ['group', 'groups', 'Nothing to arrange.'],
+  CLOSE_DUPLICATES: ['duplicate closed', 'duplicates closed', 'No duplicates found.'],
+  SLEEP_INACTIVE: ['tab slept', 'tabs slept', 'No idle tabs to sleep.'],
+  SAVE_SESSION: ['tab saved', 'tabs saved', 'No tabs to save.']
+};
+
+const statusEl = document.getElementById('status');
+const buttons = Object.keys(ACTIONS).map(id => document.getElementById(id)).filter(Boolean);
+
+function setStatus(text, isError = false) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle('error', isError);
+}
 
 async function triggerAction(action) {
   buttons.forEach(b => b.disabled = true);
+  setStatus('Working…');
   try {
-    await chrome.runtime.sendMessage({ action });
+    const response = await chrome.runtime.sendMessage({ action });
+    const [one, many, none] = RESULT_TEXT[action];
+    if (response?.status === 'error') {
+      setStatus(response.error || 'Something went wrong.', true);
+    } else {
+      const count = response?.count ?? 0;
+      setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
+    }
   } catch (err) {
     console.error('Failed to send message:', err);
+    setStatus(err?.message || 'Something went wrong.', true);
   } finally {
     buttons.forEach(b => b.disabled = false);
   }
 }
 
-if (btnDate) {
-  btnDate.addEventListener('click', () => triggerAction('ARRANGE_BY_DATE'));
+for (const [id, action] of Object.entries(ACTIONS)) {
+  document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
 }
 
-if (btnWebsite) {
-  btnWebsite.addEventListener('click', () => triggerAction('ARRANGE_BY_WEBSITE'));
-}
+// Sleep threshold, shared with background.js via chrome.storage.sync.
+const sleepHoursInput = document.getElementById('sleep-hours');
 
-if (btnDedupe) {
-  btnDedupe.addEventListener('click', () => triggerAction('CLOSE_DUPLICATES'));
-}
+chrome.storage.sync.get('sleepHours').then(({ sleepHours = 1 }) => {
+  sleepHoursInput.value = sleepHours;
+});
 
-if (btnSleep) {
-  btnSleep.addEventListener('click', () => triggerAction('SLEEP_INACTIVE'));
-}
-
-if (btnSession) {
-  btnSession.addEventListener('click', () => triggerAction('SAVE_SESSION'));
-}
+sleepHoursInput.addEventListener('change', async () => {
+  const hours = Math.min(168, Math.max(0.25, Number(sleepHoursInput.value) || 1));
+  sleepHoursInput.value = hours;
+  await chrome.storage.sync.set({ sleepHours: hours });
+  setStatus(`Sleeping tabs idle over ${hours}h.`);
+});
