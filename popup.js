@@ -1,22 +1,22 @@
-async function triggerAction(action, btn) {
-  if (btn.disabled) return;
-  btn.disabled = true;
+const btnDate = document.getElementById('btn-date');
+const btnWebsite = document.getElementById('btn-website');
+const buttons = [btnDate, btnWebsite].filter(Boolean);
+
+async function triggerAction(action) {
+  buttons.forEach(b => b.disabled = true);
   try {
     await chrome.runtime.sendMessage({ action });
   } catch (err) {
     console.error('Failed to send message:', err);
   } finally {
-    btn.disabled = false;
+    buttons.forEach(b => b.disabled = false);
   }
 }
 
-const btnDate = document.getElementById('btn-date');
-const btnWebsite = document.getElementById('btn-website');
-
 if (btnDate) {
-  btnDate.addEventListener('click', () => triggerAction('ARRANGE_BY_DATE', btnDate));
+  btnDate.addEventListener('click', () => triggerAction('ARRANGE_BY_DATE'));
 }
 
 if (btnWebsite) {
-  btnWebsite.addEventListener('click', () => triggerAction('ARRANGE_BY_WEBSITE', btnWebsite));
+  btnWebsite.addEventListener('click', () => triggerAction('ARRANGE_BY_WEBSITE'));
 }
