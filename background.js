@@ -1,11 +1,14 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'ARRANGE_BY_WEBSITE') {
+  if (request?.action === 'ARRANGE_BY_WEBSITE') {
     arrangeByWebsite()
       .then(() => sendResponse({ status: 'done' }))
-      .catch((err) => sendResponse({ status: 'error', error: err ? err.message : String(err) }));
+      .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
     return true;
-  } else if (request.action === 'ARRANGE_BY_DATE') {
-    // arrangeByDate(); // Will be implemented in Task 4
+  } else if (request?.action === 'ARRANGE_BY_DATE') {
+    arrangeByDate()
+      .then(() => sendResponse({ status: 'done' }))
+      .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
+    return true;
   }
 });
 
@@ -64,3 +67,59 @@ async function arrangeByWebsite() {
     }
   }
 }
+
+function getDateBucket(lastAccessed) {
+  if (!lastAccessed) return 'Unknown';
+  
+  const now = new Date();
+  const accessedDate = new Date(lastAccessed);
+  
+  const diffTime = Math.abs(now - accessedDate);
+  const diffDays = diffTime / (1000 * 60 * 60 * 24);
+  
+  if (diffDays < 1) return 'Today';
+  if (diffDays < 7) return 'This Week';
+  if (diffDays < 14) return 'Last Week';
+  if (diffDays < 30) return 'This Month';
+  return 'Older';
+}
+
+async function arrangeByDate() {
+  const tabs = await ungroupAllTabs();
+  
+  const groups = {};
+  for (const tab of tabs) {
+    if (tab.pinned) continue;
+    const bucket = getDateBucket(tab.lastAccessed);
+    
+    if (!groups[tab.windowId]) groups[tab.windowId] = {};
+    if (!groups[tab.windowId][bucket]) groups[tab.windowId][bucket] = [];
+    
+    groups[tab.windowId][bucket].push(tab.id);
+  }
+
+  const bucketColors = {
+    'Today': 'green',
+    'This Week': 'blue',
+    'Last Week': 'purple',
+    'This Month': 'yellow',
+    'Older': 'grey',
+    'Unknown': 'grey'
+  };
+
+  for (const windowId of Object.keys(groups)) {
+    for (const [bucket, tabIds] of Object.entries(groups[windowId])) {
+      if (tabIds.length > 0) {
+        try {
+          const groupId = await chrome.tabs.group({ tabIds });
+          await chrome.tabGroups.update(groupId, { 
+            title: bucket, 
+            collapsed: true,
+            color: bucketColors[bucket]
+          });
+        } catch(e) {}
+      }
+    }
+  }
+}
+
