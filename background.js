@@ -73,6 +73,7 @@ function getDateBucket(lastAccessed) {
   
   const now = new Date();
   const accessedDate = new Date(lastAccessed);
+  if (isNaN(accessedDate.getTime())) return 'Unknown';
   
   const diffTime = Math.abs(now - accessedDate);
   const diffDays = diffTime / (1000 * 60 * 60 * 24);
@@ -107,9 +108,12 @@ async function arrangeByDate() {
     'Unknown': 'grey'
   };
 
+  const BUCKET_ORDER = ['Today', 'This Week', 'Last Week', 'This Month', 'Older', 'Unknown'];
+
   for (const windowId of Object.keys(groups)) {
-    for (const [bucket, tabIds] of Object.entries(groups[windowId])) {
-      if (tabIds.length > 0) {
+    for (const bucket of BUCKET_ORDER) {
+      const tabIds = groups[windowId]?.[bucket];
+      if (tabIds && tabIds.length > 0) {
         try {
           const groupId = await chrome.tabs.group({ tabIds });
           await chrome.tabGroups.update(groupId, { 
@@ -117,7 +121,9 @@ async function arrangeByDate() {
             collapsed: true,
             color: bucketColors[bucket]
           });
-        } catch(e) {}
+        } catch (e) {
+          console.error(`Failed to group tabs for bucket ${bucket}:`, e);
+        }
       }
     }
   }
