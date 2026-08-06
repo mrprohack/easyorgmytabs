@@ -1,110 +1,40 @@
-# Easy Organize My Tabs
+# Tab Organizer Pro
 
-A privacy-first Chrome and Microsoft Edge extension for searching, grouping, cleaning, saving, and restoring browser tabs.
+A sleek and powerful Chrome Extension that automatically organizes your messy browser tabs into clean, color-coded Chrome Tab Groups.
 
-## What is improved
+## Features
 
-- Fast search across tab titles, URLs, and domains
-- Grouping by browser window or website domain
-- Sorting by browser position, title, or domain
-- Multi-select bulk actions: reload, pin, mute, and close
-- Duplicate URL cleanup that removes tracking parameters and URL fragments
-- Optional protection for pinned duplicate tabs
-- Named sessions for the current window or every browser window
-- Session restore, rename, delete, JSON export, and validated import
-- System, light, and dark themes
-- Accessible keyboard focus, semantic controls, and live status messages
-- No analytics, advertising, remote scripts, network service, or host permissions
-- Automated tests, static extension validation, and CI
+*   **Group by Website**: Automatically collects all tabs from the same domain (e.g., all your YouTube or GitHub tabs) and collapses them into a single colored group.
+*   **Group by Date**: Neatly sorts your tabs chronologically based on the last time you visited them (Today, This Week, Last Week, This Month, Older).
+*   **Premium UI**: A beautifully designed popup interface using a clean glassmorphism aesthetic and smooth transitions.
+*   **Safe & Reliable**: Built with Manifest V3. Safely handles multiple browser windows and respects pinned tabs so they are never accidentally grouped.
 
-## Install in Chrome
+## Installation
 
-1. Download and extract the ZIP file.
-2. Open `chrome://extensions`.
-3. Enable **Developer mode**.
-4. Select **Load unpacked**.
-5. Choose the extracted project folder containing `manifest.json`.
-6. Pin **Easy Organize My Tabs** from the browser extensions menu.
+Currently, this extension is available to install manually via Developer Mode in Chrome.
 
-## Install in Microsoft Edge
+1.  Clone this repository or download the source code as a ZIP and extract it.
+    ```bash
+    git clone https://github.com/mrprohack/easyorgmytabs.git
+    ```
+2.  Open Google Chrome and navigate to `chrome://extensions/`.
+3.  Enable **Developer mode** using the toggle switch in the top right corner.
+4.  Click the **Load unpacked** button.
+5.  Select the folder where you cloned or extracted the source code.
+6.  The extension is now installed! Click the puzzle piece icon in your Chrome toolbar and pin **Tab Organizer Pro** for easy access.
 
-1. Download and extract the ZIP file.
-2. Open `edge://extensions`.
-3. Enable **Developer mode**.
-4. Select **Load unpacked**.
-5. Choose the extracted project folder containing `manifest.json`.
+## Usage
 
-## Keyboard shortcut
+1.  Open the extension popup by clicking its icon in the toolbar.
+2.  Click **Arrange by Date** to organize your current window's tabs chronologically.
+3.  Click **Arrange by Website** to organize your current window's tabs by their domain names.
 
-The default shortcut is:
+## Built With
 
-- Windows/Linux: `Ctrl+Shift+Y`
-- macOS: `Command+Shift+Y`
-
-Browser shortcut conflicts can be changed at `chrome://extensions/shortcuts` or `edge://extensions/shortcuts`.
-
-## Permissions
-
-The extension requests only:
-
-- `tabs`: list and manage open tabs
-- `storage`: save settings and tab sessions locally
-
-It requests no website host access and contains no analytics or remote code.
-
-## Development
-
-Requirements:
-
-- Node.js 20 or newer
-
-Commands:
-
-```bash
-npm test
-npm run validate
-npm run check
-```
-
-No package installation is required because the project has no runtime or development dependencies.
-
-## Project structure
-
-```text
-manifest.json                  Extension manifest
-src/background.js              Badge and installation defaults
-src/lib/core.js                Pure tab/session domain logic
-src/lib/chrome-api.js          Chrome API adapter
-src/lib/settings.js            Local settings/session persistence
-src/popup/                     Main tab dashboard
-src/options/                   Settings and saved-session manager
-src/icons/                     Extension icons
-tests/                         Unit and static validation tests
-docs/superpowers/              Design and implementation plan
-```
-
-## Session export format
-
-Exports use versioned JSON:
-
-```json
-{
-  "version": 1,
-  "exportedAt": "2026-08-06T12:00:00.000Z",
-  "sessions": []
-}
-```
-
-Imports are validated for format, URL safety, session count, window count, and tab count before being saved.
-
-## Release packaging
-
-To create an installable ZIP from the project root:
-
-```bash
-zip -r easy-organize-my-tabs-extension.zip manifest.json src README.md LICENSE PRIVACY.md -x "*.DS_Store"
-```
+*   HTML/CSS/JavaScript
+*   Chrome Extensions API (Manifest V3)
+*   [Inter Font](https://fonts.google.com/specimen/Inter) system fallbacks
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License

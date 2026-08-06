@@ -1,45 +1,45 @@
 {
   "manifest_version": 3,
-  "name": "Easy Organize My Tabs",
-  "short_name": "Organize Tabs",
-  "version": "2.0.0",
-  "description": "Search, group, clean, save, and restore browser tabs without tracking or external services.",
-  "minimum_chrome_version": "120",
-  "permissions": ["tabs", "storage"],
+  "name": "Tab Organizer Pro",
+  "version": "1.1",
+  "description": "Beautifully organize your tabs by date or website.",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "favicon"
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
   "background": {
-    "service_worker": "src/background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Easy Organize My Tabs",
-    "default_popup": "src/popup/popup.html",
+    "default_popup": "popup.html",
     "default_icon": {
-      "16": "src/icons/icon16.png",
-      "32": "src/icons/icon32.png",
-      "48": "src/icons/icon48.png",
-      "128": "src/icons/icon128.png"
-    }
-  },
-  "icons": {
-    "16": "src/icons/icon16.png",
-    "32": "src/icons/icon32.png",
-    "48": "src/icons/icon48.png",
-    "128": "src/icons/icon128.png"
-  },
-  "options_ui": {
-    "page": "src/options/options.html",
-    "open_in_tab": true
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_title": "Tab Organizer Pro"
   },
   "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+Y",
-        "mac": "Command+Shift+Y"
-      },
-      "description": "Open Easy Organize My Tabs"
+    "ARRANGE_BY_DATE": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Arrange tabs by date"
+    },
+    "ARRANGE_BY_WEBSITE": {
+      "suggested_key": { "default": "Alt+Shift+W" },
+      "description": "Arrange tabs by website"
+    },
+    "CLOSE_DUPLICATES": {
+      "suggested_key": { "default": "Alt+Shift+X" },
+      "description": "Close duplicate tabs"
     }
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
