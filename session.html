@@ -3,29 +3,309 @@
 <head>
   <meta charset="UTF-8">
   <title>Saved Sessions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Outfit:wght@500;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-    .session { margin-bottom: 30px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
-    .session h2 { margin-top: 0; font-size: 18px; }
+    :root {
+      --bg: #0f172a;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --text-main: #ffffff;
+      --text-muted: #94a3b8;
+      --accent: #06b6d4;
+      --accent-hover: #0891b2;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --success-hover: #059669;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background-color: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text-main);
+      overflow-x: hidden;
+    }
+
+    /* Aurora Background Effect */
+    .aurora-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .aurora-bg::before, .aurora-bg::after {
+      content: '';
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.5;
+      animation: float 20s infinite alternate ease-in-out;
+    }
+    .aurora-bg::before {
+      background: #4f46e5; /* Indigo */
+      top: -100px;
+      left: -100px;
+    }
+    .aurora-bg::after {
+      background: #d946ef; /* Fuchsia */
+      bottom: -100px;
+      right: -100px;
+      animation-delay: -10s;
+    }
+    .aurora-bg .orb-3 {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.4;
+      background: #06b6d4; /* Cyan */
+      top: 40%;
+      left: 40%;
+      animation: float 25s infinite alternate-reverse ease-in-out;
+    }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(100px, 100px) scale(1.2); }
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 36px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 40px;
+      letter-spacing: -1px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+
+    #sessions-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
+    }
+
+    /* Glass Cards */
+    .session {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px) saturate(120%);
+      -webkit-backdrop-filter: blur(20px) saturate(120%);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .session:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .session h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    /* Action Buttons */
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
     
-    .link-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
-    .link-row:last-child { border-bottom: none; }
-    .link { color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%; }
-    .link:hover { text-decoration: underline; }
+    .restore-btn:hover { background: var(--accent); border-color: var(--accent); }
+    .delete-session-btn:hover { background: var(--danger); border-color: var(--danger); }
+
+    .btn-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    /* Links List */
+    .links-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 20px;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    /* Scrollbar */
+    .links-list::-webkit-scrollbar { width: 4px; }
+    .links-list::-webkit-scrollbar-track { background: transparent; }
+    .links-list::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 4px; }
+
+    .link-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    .link-row:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 85%;
+      transition: color 0.2s;
+    }
+    .link-row:hover .link {
+      color: var(--text-main);
+    }
+
+    .delete-link-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      opacity: 0;
+      transition: opacity 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .link-row:hover .delete-link-btn {
+      opacity: 1;
+    }
+    .delete-link-btn:hover {
+      color: var(--danger);
+    }
+    .delete-link-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Add Link Form */
+    .add-link-form {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--glass-border);
+    }
     
-    .restore-btn { background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
-    .delete-session-btn { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-left: 8px; }
-    .delete-link-btn { background: transparent; color: #94a3b8; border: none; cursor: pointer; font-size: 14px; padding: 4px; }
-    .delete-link-btn:hover { color: #ef4444; }
-    
-    .add-link-form { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
-    .add-link-input { flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
-    .add-link-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+    .add-link-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .add-link-input::placeholder {
+      color: var(--text-muted);
+    }
+    .add-link-input:focus {
+      border-color: var(--accent);
+    }
+
+    .add-link-btn {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      width: 38px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .add-link-btn:hover {
+      background: var(--success);
+      border-color: var(--success);
+    }
+    .add-link-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 16px;
+      padding: 60px;
+      grid-column: 1 / -1;
+      background: var(--glass-bg);
+      border: 1px dashed var(--glass-border);
+      border-radius: 16px;
+    }
   </style>
 </head>
 <body>
-  <h1>Your Saved Sessions</h1>
-  <div id="sessions-container"></div>
+  <div class="aurora-bg"><div class="orb-3"></div></div>
+  
+  <div class="container">
+    <h1>Saved Sessions</h1>
+    <div id="sessions-container"></div>
+  </div>
+
   <script src="session.js"></script>
 </body>
 </html>
