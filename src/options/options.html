@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Easy Organize My Tabs — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">EASY ORGANIZE MY TABS</p>
+        <h1>Settings & saved sessions</h1>
+        <p>Configure how tabs appear and manage restorable workspace snapshots.</p>
+      </div>
+      <div class="privacy-badge">Private by design · no tracking</div>
+    </header>
+
+    <section class="panel" aria-labelledby="preferences-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="preferences-title">Preferences</h2>
+          <p>Changes save automatically.</p>
+        </div>
+        <button id="reset-settings" type="button" class="secondary-button">Reset defaults</button>
+      </div>
+
+      <form id="settings-form" class="settings-grid">
+        <label class="field">
+          <span>Theme</span>
+          <select name="theme" id="theme">
+            <option value="system">Follow system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Default grouping</span>
+          <select name="groupBy" id="group-by">
+            <option value="window">Window</option>
+            <option value="domain">Domain</option>
+            <option value="none">No grouping</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Default sorting</span>
+          <select name="sortBy" id="sort-by">
+            <option value="position">Browser position</option>
+            <option value="title">Tab title</option>
+            <option value="domain">Website domain</option>
+          </select>
+        </label>
+
+        <label class="toggle-card">
+          <input type="checkbox" name="confirmBulkClose" id="confirm-bulk-close">
+          <span><strong>Confirm bulk close</strong><small>Ask before closing multiple selected or duplicate tabs.</small></span>
+        </label>
+
+        <label class="toggle-card">
+          <input type="checkbox" name="preservePinnedDuplicates" id="preserve-pinned">
+          <span><strong>Protect pinned duplicates</strong><small>When cleaning duplicates, keep a pinned copy when one exists.</small></span>
+        </label>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="sessions-title">
+      <div class="section-heading session-heading">
+        <div>
+          <h2 id="sessions-title">Saved sessions</h2>
+          <p id="session-summary">No sessions saved.</p>
+        </div>
+        <div class="header-actions">
+          <button id="import-button" type="button" class="secondary-button">Import JSON</button>
+          <button id="export-all" type="button" class="primary-button">Export all</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+
+      <div id="sessions-list" class="sessions-list"></div>
+      <div id="sessions-empty" class="empty-state" hidden>
+        <div aria-hidden="true">▤</div>
+        <h3>No saved sessions yet</h3>
+        <p>Open the extension popup and choose “Save this window” or “Save all windows.”</p>
+      </div>
+    </section>
+
+    <section class="panel compact-panel" aria-labelledby="permissions-title">
+      <h2 id="permissions-title">Permissions</h2>
+      <p><strong>Tabs</strong> is used to list and manage open tabs. <strong>Storage</strong> saves preferences and sessions locally. The extension requests no access to website content and sends no data anywhere.</p>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
