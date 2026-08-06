@@ -7,9 +7,20 @@
     body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
     .session { margin-bottom: 30px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
     .session h2 { margin-top: 0; font-size: 18px; }
-    .link { display: block; padding: 8px 0; color: #4f46e5; text-decoration: none; }
+    
+    .link-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+    .link-row:last-child { border-bottom: none; }
+    .link { color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%; }
     .link:hover { text-decoration: underline; }
+    
     .restore-btn { background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+    .delete-session-btn { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-left: 8px; }
+    .delete-link-btn { background: transparent; color: #94a3b8; border: none; cursor: pointer; font-size: 14px; padding: 4px; }
+    .delete-link-btn:hover { color: #ef4444; }
+    
+    .add-link-form { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+    .add-link-input { flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .add-link-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
   </style>
 </head>
 <body>
