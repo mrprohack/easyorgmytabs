@@ -197,7 +197,7 @@ const DEFAULT_SLEEP_HOURS = 1;
 async function sleepInactive() {
   const { sleepHours = DEFAULT_SLEEP_HOURS } = await chrome.storage.sync.get('sleepHours');
   const cutoff = Date.now() - sleepHours * 60 * 60 * 1000;
-  const tabs = await chrome.tabs.query({ active: false, discarded: false });
+  const tabs = await chrome.tabs.query({ currentWindow: true, active: false, discarded: false });
 
   let slept = 0;
   for (const tab of tabs) {

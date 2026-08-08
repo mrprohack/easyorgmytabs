@@ -150,6 +150,14 @@ async function main() {
   state = mockChrome([{ url: 'https://slow.com/', lastAccessed: hoursAgo(1.5) }]);
   assert.strictEqual(await sleepInactive(), 1);
 
+  // sleepInactive never touches tabs in other windows.
+  state = mockChrome([
+    { url: 'https://other-window.com/', lastAccessed: hoursAgo(5), windowId: 2 },
+    { url: 'https://mine.com/', lastAccessed: hoursAgo(3) }
+  ]);
+  assert.strictEqual(await sleepInactive(), 1);
+  assert.deepStrictEqual(state.log, [['discard', 2]]);
+
   // arrangeByWebsite skips chrome:// and pinned tabs.
   state = mockChrome([
     { url: 'https://www.youtube.com/a' },
