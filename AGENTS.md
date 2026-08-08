@@ -1,41 +1,49 @@
 # Project Context: Tab Organizer Pro (easyorgmytabs)
 
-## Project Overview
-This project is a premium Chrome Extension (Manifest V3) designed to help power users organize and manage their browser tabs efficiently. The extension provides a suite of tools for grouping tabs, deduplicating them, saving memory, and storing tab sessions for later use.
+## Key Commands & Verification
 
-## Core Features & Architecture
+- **Tests:** `node test.js` — the only automated check (no build step, no package.json, no linter).
+- **How test.js works:** it `eval`s `background.js` in Node with a mocked `chrome` global (`storage`, `tabs`, `tabGroups`, `runtime`, `commands`). Two consequences:
+  - `background.js` must stay plain-script compatible: **no ES modules, no top-level await**.
+  - Any new top-level `chrome.*` API call in `background.js` must also be stubbed in `test.js` or the suite crashes.
+- Run `node test.js` after any change to `background.js`, `test.js`, or popup/session status text.
 
-### V1 Features (Organization)
-- **Arrange by Date:** Groups all open tabs into collapsible Chrome Tab Groups based on when they were last accessed (e.g., Today, Yesterday, This Week, Last Week, Last Month, Older).
-- **Arrange by Website:** Groups all open tabs into Chrome Tab Groups based on their base domain (e.g., youtube.com, google.com).
+## Architecture & Responsibilities
+- `manifest.json`: MV3, permissions `tabs`, `tabGroups`, `storage`, `favicon`. Version 1.1.
+- `background.js`: service worker; ALL tab manipulation lives here. Every action is an async function in the `HANDLERS` map (line 1) that returns a count, or rejects.
+- `popup.html`/`popup.js`: sends `{ action }` messages, disables buttons while working, renders the returned count via `RESULT_TEXT` (singular/plural/none per action). Also holds the `sleepHours` threshold input.
+- `session.html`/`session.js`: dashboard for saved sessions (restore/delete/add links/search).
+- `styles.css`: shared by both — `body.popup` vs `body.dashboard` scope differences.
 
-### V2 Features (Power-User Tools)
-- **Close Duplicates:** Scans the active window and closes tabs sharing the same URL once the fragment and campaign params (`utm_*`, `fbclid`, …) are stripped. Keeps the pinned copy, else the active one, else the first; never closes a pinned tab.
-- **Sleep Inactive Tabs (Memory Saver):** Uses `chrome.tabs.discard()` on tabs idle longer than the threshold in `chrome.storage.sync.sleepHours` (default 1). **Rules:** Never sleep pinned tabs, and never sleep tabs playing audio (`tab.audible`).
-- **Save Session:** Saves all non-pinned, restorable tabs to `chrome.storage.local`, opens the dashboard (`session.html`), then closes them. Order matters — closing first can close the whole window.
-- **Keyboard shortcuts:** `commands` in the manifest reuse the same action names as the messages, so `chrome.commands.onCommand` dispatches through the same `HANDLERS` map.
+## Wiring Rules (easy to miss)
+- **New action = 3 edits:** `background.js` `HANDLERS` + `popup.js` `ACTIONS` map + `popup.js` `RESULT_TEXT`. Missing any one fails silently (popup gets an empty reply and shows the "none" message).
+- Reply contract: `{ status: 'done', count }` or `{ status: 'error', error }`; the listener returns `true` for async.
+- **Keyboard shortcuts only exist for 3 of 5 actions:** `ARRANGE_BY_DATE` (Alt+Shift+D), `ARRANGE_BY_WEBSITE` (Alt+Shift+W), `CLOSE_DUPLICATES` (Alt+Shift+X). `chrome.commands.onCommand` dispatches command names straight into `HANDLERS`, so any new command name must match a handler name exactly.
+- Saved sessions live in `chrome.storage.local.savedSessions` (array of `{date, tabs:[{title,url}]}`); the sleep threshold lives in `chrome.storage.sync.sleepHours` (default 1, clamped 0.25–168 by the popup).
 
-## File Structure & Responsibilities
-- `manifest.json`: Manifest V3 configuration. Requires `tabs`, `tabGroups`, `storage`, and `favicon` permissions.
-- `background.js`: The service worker. Handles all actual tab manipulation, grouping logic, discarding, and storage operations. Every action lives in the `HANDLERS` map and returns a count that the popup turns into its status line.
-- `popup.html` & `popup.js`: The extension popup UI. Sends messages (e.g., `action: 'ARRANGE_BY_DATE'`) to the background script and reports the resulting count inline.
-- `session.html` & `session.js`: A full-page dashboard UI to manage (restore/delete/add to/search) saved sessions.
-- `styles.css`: Centralized stylesheet shared by both surfaces — `body.popup` and `body.dashboard` scope the differences.
-- `test.js`: `node test.js` — self-check for the pure helpers in `background.js`.
-- `icon.svg`: Vector mark used by the popup and dashboard headers. Its `rx="28"` on a 128-unit viewBox is why `.header img` uses `border-radius: 21.875%` — keep the two in sync or the CSS corner clips a different curve than the artwork.
-- `icon16/32/48/128.png`: Raster icons for the toolbar, extensions page, and store. 16 and 32 use a simplified flat-card mark because the offset cards turn to mush below ~48px; 48 and 128 use the detailed mark. Regenerate all four together if the logo changes.
+## Behavior Gotchas
+- **Scopes differ per action:** `ARRANGE_BY_*` group tabs **across all windows** (ungrouping every non-pinned tab in every window first, per-window groups); `CLOSE_DUPLICATES`, `SLEEP_INACTIVE`, and `SAVE_SESSION` are **current-window only**.
+- **Date buckets** (from `getDateBucket`): `Today`, `This Week`, `Last Week`, `This Month`, `Older`, plus `Unknown` (missing/invalid `lastAccessed`). Note: no "Yesterday" bucket.
+- **Skipped tabs:** pinned tabs are never grouped/slept/closed; tabs with non-restorable schemes (`chrome:`, `chrome-extension:`, `edge:`, `about:`, `devtools:`, `view-source:`, … — see `BLOCKED_SCHEMES`/`isRestorable`) are ignored for grouping and session-saving.
+- **Close Duplicates:** strips the URL fragment plus tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`) before comparing; keeps pinned copy → active copy → first; never closes a pinned tab.
+- **Save Session ordering matters:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, **opens the dashboard first, then closes the tabs** — closing first would close the whole window.
+- **Sleep rules:** never sleeps pinned tabs, audible tabs, or the active tab.
 
-## UI / UX Design Guidelines
-The user prefers a **unified, premium aesthetic** across all UI surfaces (popup and dashboard).
+## Security & UI Rules
+- Saved tab titles/URLs are attacker-controlled page data. Never interpolate them into `innerHTML` — set via `textContent` and only assign an `href` after checking the scheme is `http(s)` (`isLinkable` in session.js). The only `innerHTML` is the `icon()` helper with hard-coded inline SVG paths.
+- No `alert`/`confirm` anywhere: the popup has a status line; the dashboard Delete button uses a two-step inline confirm.
+- Restore opens a fresh window via `chrome.windows.create({ url: [...], })`; favicons come from the extension `/_favicon/` API.
 
-- **Theme:** Premium minimal/glass aesthetic.
-- **Backgrounds:** Use a soft, modern gradient: `linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)`.
-- **Buttons:** Pill-shaped white buttons with soft shadows (`box-shadow: 0 2px 4px rgba(0,0,0,0.05);`), crisp SVG iconography, and subtle hover translations (`translateY(-2px)`).
-- **Typography:** `system-ui` sans-serif stack. Clean, highly legible text with high contrast (`#1e293b` for primary, `#334155` for buttons, `#3b82f6` for links).
-- **Cards/Containers:** Frosted translucent panels or clean white boxes with generous padding and border-radius (`16px`).
+## UI / UX Design Guidelines (premium glass aesthetic — match exactly)
+- Background: `linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)`.
+- Buttons: white, `border-radius: 12px`, `box-shadow: 0 2px 4px rgb(0 0 0 / 0.05)`, hover `translateY(-2px)` + indigo shadow, inline SVG stroke icons (`stroke-width: 2`).
+- Typography: `system-ui` stack; `#1e293b` primary, `#334155` buttons, `#3b82f6` links, `#6366f1` accent.
+- Cards: frosted `rgba(255,255,255,0.6)` + `backdrop-filter: blur(12px)`, `border-radius: 16px`.
 
-## Agent Instructions
-- When making UI changes, ensure they exactly match the established premium aesthetic outlined above.
-- When making backend changes to `background.js`, always account for edge cases: ignore `chrome://` URLs for tab groups, respect pinned tabs, and catch asynchronous errors gracefully.
-- Do not use generic browser alerts for UI feedback; build custom UI or use the dashboard. `alert`/`confirm` are out — the popup has a status line and the dashboard's Delete button uses a two-step inline confirm.
-- Saved tab titles and URLs are attacker-controlled page data. Never interpolate them into `innerHTML`; set them via `textContent` and only assign an `href` after checking the scheme is `http(s)`.
+## Icons
+- `icon.svg`: 128-unit viewBox with `rx="28"`; `.header img` uses `border-radius: 21.875%` to match the same curve — keep the two in sync.
+- `icon16/32/48/128.png`: 16 & 32 use a simplified flat-card mark (offset cards mush below ~48px); 48 & 128 use the detailed mark. Regenerate all four together on any logo change.
+
+## Repo History Notes
+- A full `v2.0.0` rewrite (src/ layout, options page, node:test suite) was committed then **reverted** — HEAD is the flat V1 codebase; don't reintroduce the `src/` structure.
+- `README.md` documents V1 features only — treat AGENTS.md as the authoritative design doc.
