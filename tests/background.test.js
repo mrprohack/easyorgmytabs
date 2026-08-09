@@ -1,4 +1,4 @@
-// background.test.js â€” handler behavior tests via the chrome stub.
+// background.test.js Ã¢â‚¬â€ handler behavior tests via the chrome stub.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -141,5 +141,16 @@ module.exports = async function main() {
   assert.strictEqual(await arrangeByDate(), 2);
   assert.deepStrictEqual(state.groups.map(g => g.title), ['Today', 'Older']);
   assert.deepStrictEqual(state.groups[0].tabIds, [2]);
+  // sleepInactive discards in parallel batches of at most 10.
+  state = makeChromeStub(
+    Array.from({ length: 25 }, (_, i) => ({
+      url: `https://slow${i}.com/`, lastAccessed: hoursAgo(5)
+    })),
+    { sleepHours: 1 },
+    { delayMs: 2 }
+  );
+  assert.strictEqual(await sleepInactive(), 25);
+  assert.strictEqual(state.log.filter(([op]) => op === 'discard').length, 25);
+  assert.ok(state.maxInFlight.discard > 1, 'discards should overlap');
+  assert.ok(state.maxInFlight.discard <= 10, 'at most 10 concurrent discards');
 };
-

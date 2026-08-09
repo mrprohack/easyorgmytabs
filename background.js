@@ -128,28 +128,20 @@ async function closeDuplicates() {
   return tabsToRemove.length;
 }
 
-const DEFAULT_SLEEP_HOURS = 1;
-
 async function sleepInactive() {
   const { sleepHours = DEFAULT_SLEEP_HOURS } = await chrome.storage.sync.get('sleepHours');
   const cutoff = Date.now() - sleepHours * 60 * 60 * 1000;
   const tabs = await chrome.tabs.query({ active: false, discarded: false });
-
-  let slept = 0;
-  for (const tab of tabs) {
-    if (tab.audible || tab.pinned) continue; // Don't sleep playing media or pinned tabs
-    if (!tab.lastAccessed || tab.lastAccessed > cutoff) continue;
-
-    try {
-      await chrome.tabs.discard(tab.id);
-      slept++;
-    } catch (e) {
-      console.error("Failed to discard tab:", e);
-    }
-  }
-  return slept;
+  const idleIds = tabs
+    .filter(t => !t.audible && !t.pinned && t.lastAccessed && t.lastAccessed <= cutoff)
+    .map(t => t.id);
+  return runBatched(
+    idleIds,
+    10,
+    id => chrome.tabs.discard(id),
+    (err, id) => console.error(`Failed to discard tab ${id}:`, err)
+  );
 }
-
 async function saveSession() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const tabsToSave = tabs.filter(t => !t.pinned && isRestorable(t.url));
