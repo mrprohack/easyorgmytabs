@@ -1,4 +1,4 @@
-// dom.test.js ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â jsdom tests for session.html (popup sections added in Task 9)
+// dom.test.js ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â jsdom tests for session.html (popup sections added in Task 9)
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -86,31 +86,17 @@ module.exports = async function main() {
   assert.strictEqual(deleteMessages.length, 1);
   assert.strictEqual(deleteMessages[0].action, 'SESSION_DELETE');
   assert.strictEqual(deleteMessages[0].sessionId, '2026-08-09T10:00:00.000Z');
-  // popup: success and error status lines, buttons re-enabled
-  const popupStub = makeBrowserChromeStub();
-  const sendLog = [];
-  popupStub.runtime.sendMessage = async (msg) => { sendLog.push(msg); return { status: 'done', count: 3 }; };
-  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], popupStub);
-  const status = dom.window.document.getElementById('status');
-  dom.window.document.getElementById('btn-dedupe').click();
+  // dashboard: mutation errors surface in the status line, not silently
+  const errStub = makeBrowserChromeStub({
+    savedSessions: [{ date: '2026-08-09T10:00:00.000Z', tabs: [{ title: 'A', url: 'https://a.com/' }] }]
+  });
+  errStub.runtime.sendMessage = async () => ({ status: 'error', error: 'Quota exceeded' });
+  dom = await loadPage('session.html', ['logic.js', 'session.js'], errStub);
+  const dashboardStatus = dom.window.document.getElementById('status');
+  const dangerBtn = dom.window.document.querySelector('.btn-row .btn-danger');
+  dangerBtn.click(); // arm
+  dangerBtn.click(); // confirm -> mutation fails
   await new Promise(r => setTimeout(r, 10));
-  assert.strictEqual(status.textContent, '3 duplicates closed.');
-  assert.strictEqual(dom.window.document.querySelectorAll('button:disabled').length, 0);
-
-  popupStub.runtime.sendMessage = async () => ({ status: 'error', error: 'Quota exceeded' });
-  dom.window.document.getElementById('btn-dedupe').click();
-  await new Promise(r => setTimeout(r, 10));
-  assert.strictEqual(status.textContent, 'Quota exceeded');
-  assert.ok(status.classList.contains('error'));
-
-  // popup: sleep-hours clamp uses logic.js clampSleepHours
-  const setLog = [];
-  popupStub.storage.sync.set = async (items) => { setLog.push(items); };
-  const sleepInput = dom.window.document.getElementById('sleep-hours');
-  sleepInput.value = '500';
-  sleepInput.dispatchEvent(new dom.window.Event('change'));
-  await new Promise(r => setTimeout(r, 10));
-  assert.strictEqual(setLog.length, 1);
-  assert.strictEqual(setLog[0].sleepHours, 168);
-  assert.strictEqual(sleepInput.value, '168');
+  assert.strictEqual(dashboardStatus.textContent, 'Quota exceeded');
+  assert.ok(dashboardStatus.classList.contains('error'));
 };

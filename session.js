@@ -1,4 +1,5 @@
 const container = document.getElementById('sessions-container');
+const statusEl = document.getElementById('status');
 const searchInput = document.getElementById('search');
 const { filterSessions, isLinkable } = window;
 
@@ -171,9 +172,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 async function mutate(action, payload) {
-  const response = await chrome.runtime.sendMessage({ action, ...payload });
-  if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
-  await loadSessions();
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+  try {
+    const response = await chrome.runtime.sendMessage({ action, ...payload });
+    if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
+    await loadSessions();
+  } catch (err) {
+    statusEl.textContent = err?.message || 'Something went wrong.';
+    statusEl.classList.add('error');
+  }
 }
 
 loadSessions();
