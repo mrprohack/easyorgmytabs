@@ -173,6 +173,22 @@ module.exports = async function main() {
   assert.strictEqual(undoMessages[0].action, 'UNDO_CLOSE');
   assert.strictEqual(undoStatus.textContent, '1 tab restored.');
 
+
+  // popup: keyboard shortcut chips shown on the actions that have one
+  dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], makeBrowserChromeStub());
+  const chips = {
+    date: dom.window.document.querySelector('#btn-date .shortcut'),
+    website: dom.window.document.querySelector('#btn-website .shortcut'),
+    dedupe: dom.window.document.querySelector('#btn-dedupe .shortcut'),
+    view: dom.window.document.querySelector('#btn-view-sessions .shortcut')
+  };
+  assert.strictEqual(chips.date.textContent, 'Alt+Shift+D');
+  assert.strictEqual(chips.website.textContent, 'Alt+Shift+W');
+  assert.strictEqual(chips.dedupe.textContent, 'Alt+Shift+X');
+  assert.strictEqual(chips.view.textContent, 'Alt+Shift+S');
+  for (const id of ['btn-undo', 'btn-sleep', 'btn-session']) {
+    assert.strictEqual(dom.window.document.querySelector(`#${id} .shortcut`), null, id + ' has no suggested shortcut');
+  }
   // popup: preview counts render into the status line on open
   const previewStub = makeBrowserChromeStub();
   previewStub.runtime.sendMessage = async (msg) => msg.action === 'PREVIEW' ? { status: 'done', count: { duplicates: 3, idle: 2 } } : { status: 'done', count: 1 };
