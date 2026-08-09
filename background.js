@@ -1,17 +1,61 @@
 importScripts('logic.js');
+function findSession(saved, sessionId) {
+  return saved.find(s => (s.id ?? s.date) === sessionId);
+}
+
+async function sessionDelete(request = {}) {
+  const { sessionId } = request;
+  if (!sessionId) return 0;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const next = saved.filter(s => (s.id ?? s.date) !== sessionId);
+    if (next.length === saved.length) return 0;
+    await writeSavedSessions(applySessionCap(next));
+    return 1;
+  });
+}
+
+async function sessionAddTab(request = {}) {
+  const { sessionId, tab } = request;
+  if (!sessionId || !tab || !isLinkable(tab.url)) return 0;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const session = findSession(saved, sessionId);
+    if (!session) return 0;
+    session.tabs.push({ title: tab.title || tab.url, url: tab.url });
+    session.tabs = session.tabs.slice(0, MAX_TABS_PER_SESSION);
+    await writeSavedSessions(applySessionCap(saved));
+    return 1;
+  });
+}
+
+async function sessionRemoveTab(request = {}) {
+  const { sessionId, index } = request;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const session = findSession(saved, sessionId);
+    if (!session || !Number.isInteger(index) || index < 0 || index >= session.tabs.length) return 0;
+    session.tabs.splice(index, 1);
+    if (session.tabs.length === 0) saved.splice(saved.indexOf(session), 1);
+    await writeSavedSessions(applySessionCap(saved));
+    return 1;
+  });
+}
 const HANDLERS = {
   ARRANGE_BY_DATE: arrangeByDate,
   ARRANGE_BY_WEBSITE: arrangeByWebsite,
   CLOSE_DUPLICATES: closeDuplicates,
   SLEEP_INACTIVE: sleepInactive,
-  SAVE_SESSION: saveSession
+  SAVE_SESSION: saveSession,
+  SESSION_DELETE: sessionDelete,
+  SESSION_ADD_TAB: sessionAddTab,
+  SESSION_REMOVE_TAB: sessionRemoveTab
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handler = HANDLERS[request?.action];
   if (!handler) return;
-
-  handler()
+  handler(request)
     .then((count) => sendResponse({ status: 'done', count }))
     .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
   return true;
