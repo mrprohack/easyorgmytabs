@@ -115,6 +115,17 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 0));
   const failStatus = dom.window.document.getElementById('status');
   assert.strictEqual(failStatus.textContent, 'Storage read failed');
+
+  // error-report: uncaught errors and rejections show in the status line
+  dom = await loadPage('session.html', ['error-report.js', 'logic.js', 'session.js'], makeBrowserChromeStub({ savedSessions: [] }));
+  const erStatus = dom.window.document.getElementById('status');
+  dom.window.dispatchEvent(new dom.window.ErrorEvent('error', { message: 'Boom' }));
+  assert.strictEqual(erStatus.textContent, 'Boom');
+  assert.ok(erStatus.classList.contains('error'));
+  const rejection = new dom.window.Event('unhandledrejection');
+  rejection.reason = new dom.window.Error('Rejecto');
+  dom.window.dispatchEvent(rejection);
+  assert.strictEqual(erStatus.textContent, 'Rejecto');
   // popup: success and error status lines, buttons re-enabled
   const popupStub = makeBrowserChromeStub();
   const sendLog = [];
