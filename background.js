@@ -1,16 +1,61 @@
+importScripts('logic.js');
+function findSession(saved, sessionId) {
+  return saved.find(s => sessionIdOf(s) === sessionId);
+}
+
+async function sessionDelete(request = {}) {
+  const { sessionId } = request;
+  if (!sessionId) return 0;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const next = saved.filter(s => sessionIdOf(s) !== sessionId);
+    if (next.length === saved.length) return 0;
+    await writeSavedSessions(applySessionCap(next));
+    return 1;
+  });
+}
+
+async function sessionAddTab(request = {}) {
+  const { sessionId, tab } = request;
+  if (!sessionId || !tab || !isLinkable(tab.url)) return 0;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const session = findSession(saved, sessionId);
+    if (!session) return 0;
+    session.tabs.push({ title: tab.title || tab.url, url: tab.url });
+    session.tabs = session.tabs.slice(0, MAX_TABS_PER_SESSION);
+    await writeSavedSessions(applySessionCap(saved));
+    return 1;
+  });
+}
+
+async function sessionRemoveTab(request = {}) {
+  const { sessionId, index } = request;
+  return enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    const session = findSession(saved, sessionId);
+    if (!session || !Number.isInteger(index) || index < 0 || index >= session.tabs.length) return 0;
+    session.tabs.splice(index, 1);
+    if (session.tabs.length === 0) saved.splice(saved.indexOf(session), 1);
+    await writeSavedSessions(applySessionCap(saved));
+    return 1;
+  });
+}
 const HANDLERS = {
   ARRANGE_BY_DATE: arrangeByDate,
   ARRANGE_BY_WEBSITE: arrangeByWebsite,
   CLOSE_DUPLICATES: closeDuplicates,
   SLEEP_INACTIVE: sleepInactive,
-  SAVE_SESSION: saveSession
+  SAVE_SESSION: saveSession,
+  SESSION_DELETE: sessionDelete,
+  SESSION_ADD_TAB: sessionAddTab,
+  SESSION_REMOVE_TAB: sessionRemoveTab
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handler = HANDLERS[request?.action];
   if (!handler) return;
-
-  handler()
+  handler(request)
     .then((count) => sendResponse({ status: 'done', count }))
     .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
   return true;
@@ -20,20 +65,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.commands.onCommand.addListener((command) => {
   HANDLERS[command]?.().catch((err) => console.error(`${command} failed:`, err));
 });
-
-// Tabs on these schemes cannot be reopened from a saved URL and are noise in tab groups.
-const BLOCKED_SCHEMES = [
-  'chrome:', 'chrome-extension:', 'chrome-search:', 'chrome-untrusted:',
-  'edge:', 'about:', 'devtools:', 'view-source:'
-];
-
-function isRestorable(url) {
-  try {
-    return !BLOCKED_SCHEMES.includes(new URL(url).protocol);
-  } catch (e) {
-    return false;
-  }
-}
 
 async function ungroupAllTabs() {
   const tabs = await chrome.tabs.query({});
@@ -48,31 +79,19 @@ async function ungroupAllTabs() {
   return tabs;
 }
 
-function getDomain(url) {
-  try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '');
-    return hostname || 'New Tab';
-  } catch (e) {
-    return 'Other';
-  }
-}
-
 // Groups tabIds under `title`, per window. Returns the number of groups created.
 async function createGroups(entries) {
-  let created = 0;
-  for (const { tabIds, title, color } of entries) {
-    if (!tabIds.length) continue;
-    try {
-      const groupId = await chrome.tabs.group({ tabIds });
-      await chrome.tabGroups.update(groupId, { title, collapsed: true, color });
-      created++;
-    } catch (e) {
-      console.error(`Failed to group tabs for "${title}":`, e);
-    }
-  }
-  return created;
+  const op = async (entry) => {
+    const groupId = await chrome.tabs.group({ tabIds: entry.tabIds });
+    await chrome.tabGroups.update(groupId, { title: entry.title, collapsed: true, color: entry.color });
+  };
+  return runBatched(
+    entries,
+    5,
+    op,
+    (err, entry) => console.error(`Failed to group tabs for "${entry.title}":`, err)
+  );
 }
-
 async function arrangeByWebsite() {
   const tabs = await ungroupAllTabs();
 
@@ -101,32 +120,6 @@ async function arrangeByWebsite() {
   return created;
 }
 
-function getDateBucket(lastAccessed) {
-  if (!lastAccessed) return 'Unknown';
-
-  const now = new Date();
-  const accessedDate = new Date(lastAccessed);
-  if (isNaN(accessedDate.getTime())) return 'Unknown';
-
-  const diffTime = Math.abs(now - accessedDate);
-  const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-  if (diffDays < 1) return 'Today';
-  if (diffDays < 7) return 'This Week';
-  if (diffDays < 14) return 'Last Week';
-  if (diffDays < 30) return 'This Month';
-  return 'Older';
-}
-
-const BUCKET_COLORS = {
-  'Today': 'green',
-  'This Week': 'blue',
-  'Last Week': 'purple',
-  'This Month': 'yellow',
-  'Older': 'grey',
-  'Unknown': 'grey'
-};
-
 async function arrangeByDate() {
   const tabs = await ungroupAllTabs();
 
@@ -150,22 +143,6 @@ async function arrangeByDate() {
     created += await createGroups(entries);
   }
   return created;
-}
-
-// Fragments and campaign params point at the same page, so they count as duplicates.
-const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|msclkid$|mc_eid$)/;
-
-function dedupeKey(url) {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = '';
-    for (const name of [...parsed.searchParams.keys()]) {
-      if (TRACKING_PARAMS.test(name)) parsed.searchParams.delete(name);
-    }
-    return parsed.href;
-  } catch (e) {
-    return url;
-  }
 }
 
 async function closeDuplicates() {
@@ -192,41 +169,61 @@ async function closeDuplicates() {
   return tabsToRemove.length;
 }
 
-const DEFAULT_SLEEP_HOURS = 1;
-
 async function sleepInactive() {
   const { sleepHours = DEFAULT_SLEEP_HOURS } = await chrome.storage.sync.get('sleepHours');
   const cutoff = Date.now() - sleepHours * 60 * 60 * 1000;
   const tabs = await chrome.tabs.query({ currentWindow: true, active: false, discarded: false });
+  const idleIds = tabs
+    .filter(t => !t.audible && !t.pinned && t.lastAccessed && t.lastAccessed <= cutoff)
+    .map(t => t.id);
+  return runBatched(
+    idleIds,
+    10,
+    id => chrome.tabs.discard(id),
+    (err, id) => console.error(`Failed to discard tab ${id}:`, err)
+  );
+}
+let sessionWriteChain = Promise.resolve();
 
-  let slept = 0;
-  for (const tab of tabs) {
-    if (tab.audible || tab.pinned) continue; // Don't sleep playing media or pinned tabs
-    if (!tab.lastAccessed || tab.lastAccessed > cutoff) continue;
-
-    try {
-      await chrome.tabs.discard(tab.id);
-      slept++;
-    } catch (e) {
-      console.error("Failed to discard tab:", e);
-    }
-  }
-  return slept;
+function enqueueSessionWrite(task) {
+  const run = sessionWriteChain.then(task, task);
+  sessionWriteChain = run.catch(() => {});
+  return run;
 }
 
+function applySessionCap(sessions) {
+  return sessions.slice(0, MAX_SAVED_SESSIONS);
+}
+
+async function readSavedSessions() {
+  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
+  return Array.isArray(savedSessions) ? savedSessions : [];
+}
+
+async function writeSavedSessions(sessions) {
+  try {
+    await chrome.storage.local.set({ savedSessions: sessions });
+  } catch (err) {
+    if (!/quota/i.test(String(err?.message || err))) throw err;
+    await chrome.storage.local.set({ savedSessions: applySessionCap(sessions).slice(0, Math.ceil(MAX_SAVED_SESSIONS / 2)) });
+  }
+}
 async function saveSession() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const tabsToSave = tabs.filter(t => !t.pinned && isRestorable(t.url));
   if (tabsToSave.length === 0) return 0;
 
   const sessionData = {
+    id: newSessionId(),
     date: new Date().toISOString(),
-    tabs: tabsToSave.map(t => ({ title: t.title || t.url, url: t.url }))
+    tabs: tabsToSave.slice(0, MAX_TABS_PER_SESSION).map(t => ({ title: t.title || t.url, url: t.url }))
   };
 
-  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
-  savedSessions.unshift(sessionData);
-  await chrome.storage.local.set({ savedSessions });
+  await enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    saved.unshift(sessionData);
+    await writeSavedSessions(applySessionCap(saved));
+  });
 
   // Open the dashboard before closing anything, or saving every tab closes the window.
   await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });

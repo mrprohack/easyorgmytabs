@@ -29,6 +29,13 @@ Currently, this extension is available to install manually via Developer Mode in
 2.  Click **Arrange by Date** to organize your current window's tabs chronologically.
 3.  Click **Arrange by Website** to organize your current window's tabs by their domain names.
 
+## Development
+
+*   Install dev dependencies: 
+pm install
+*   Run the test suite: 
+ode test.js (or 
+pm test) — covers logic helpers, background handlers, the popup/dashboard DOM, and 300-tab load scenarios.
 ## Built With
 
 *   HTML/CSS/JavaScript

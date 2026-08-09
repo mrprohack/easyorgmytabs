@@ -29,6 +29,13 @@
 - **Save Session ordering matters:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, **opens the dashboard first, then closes the tabs** — closing first would close the whole window.
 - **Sleep rules:** never sleeps pinned tabs, audible tabs, or the active tab.
 
+
+## Test Suite
+- `test.js`: `node test.js [filter]` — runner over `tests/*.test.js` (logic, background, dom via jsdom, load).
+- `logic.js`: Pure helpers shared by service worker, popup/dashboard (`<script>`), and tests (`require`): `isRestorable`, `dedupeKey`, `getDomain`, `getDateBucket`, `isLinkable`, `clampSleepHours`, `filterSessions`, `newSessionId`, `sessionIdOf`, `runBatched`, session limits (`MAX_SAVED_SESSIONS`, `MAX_TABS_PER_SESSION`).
+- `tests/helpers/chrome-stub.js`: Shared chrome mock (`makeChromeStub`, `makeBrowserChromeStub`).
+- `tests/helpers/load-background.js`: Loads `background.js` into Node tests with `logic.js` helpers exposed.
+- `tests/load.test.js`: 300-tab load acceptance suite (grouping, discarding, dedupe, save caps).
 ## Security & UI Rules
 - Saved tab titles/URLs are attacker-controlled page data. Never interpolate them into `innerHTML` — set via `textContent` and only assign an `href` after checking the scheme is `http(s)` (`isLinkable` in session.js). The only `innerHTML` is the `icon()` helper with hard-coded inline SVG paths.
 - No `alert`/`confirm` anywhere: the popup has a status line; the dashboard Delete button uses a two-step inline confirm.
