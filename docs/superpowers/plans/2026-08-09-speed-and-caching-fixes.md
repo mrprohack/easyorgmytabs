@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Tab Organizer Pro faster on large tab sets and eliminate stale/caching-style bugs (lost session writes, stale dashboard state, storage quota failures) — all covered by automated tests.
+**Goal:** Make Tab Organizer Pro faster on large tab sets and eliminate stale/caching-style bugs (lost session writes, stale dashboard state, storage quota failures) â€” all covered by automated tests.
 
 **Architecture:** Extract all pure helpers into a shared dependency-free `logic.js` (loaded by the service worker via `importScripts`, by popup/dashboard via a `<script>` tag, and by Node tests via `require`). Add a `runBatched()` concurrency limiter for tab/group API calls. Make the background service worker the single writer for `savedSessions` through a serialized write queue, with session caps and quota-error retry; the dashboard becomes a message-driven reader kept fresh by `chrome.storage.onChanged`. Tests run under plain Node `assert`; DOM surfaces are tested with jsdom (dev-only dependency).
 
@@ -21,18 +21,18 @@
 
 ## File Structure
 
-- **Create:** `logic.js` — pure helpers only, no `chrome.*`, no DOM: `BLOCKED_SCHEMES`, `isRestorable`, `getDomain`, `getDateBucket`, `BUCKET_COLORS`, `TRACKING_PARAMS`, `dedupeKey`, `isLinkable`, `clampSleepHours`, `DEFAULT_SLEEP_HOURS`, `MAX_SAVED_SESSIONS`, `MAX_TABS_PER_SESSION`, `filterSessions`, `newSessionId`, `runBatched`, plus a CommonJS export guard.
-- **Modify:** `background.js` — `importScripts('logic.js')` at the top; delete moved helpers; use `runBatched` in `createGroups`/`sleepInactive`; serialized session write queue, caps, quota retry; three new handlers `SESSION_DELETE`, `SESSION_ADD_TAB`, `SESSION_REMOVE_TAB`.
-- **Modify:** `popup.html` / `session.html` — add `<script src="logic.js"></script>` before the page script.
-- **Modify:** `popup.js` — use `clampSleepHours` from `logic.js`.
-- **Modify:** `session.js` — read sessions from storage with `onChanged` sync; all mutations via `chrome.runtime.sendMessage`; debounced search using `filterSessions`.
-- **Modify:** `test.js` — becomes a runner over `tests/*.test.js` (supports `node test.js <filter>`).
-- **Create:** `tests/helpers/chrome-stub.js` — shared chrome mock factory (moved from current `test.js`, extended with in-flight tracking, delays, failure injection, quota errors, `onChanged`).
+- **Create:** `logic.js` â€” pure helpers only, no `chrome.*`, no DOM: `BLOCKED_SCHEMES`, `isRestorable`, `getDomain`, `getDateBucket`, `BUCKET_COLORS`, `TRACKING_PARAMS`, `dedupeKey`, `isLinkable`, `clampSleepHours`, `DEFAULT_SLEEP_HOURS`, `MAX_SAVED_SESSIONS`, `MAX_TABS_PER_SESSION`, `filterSessions`, `newSessionId`, `runBatched`, plus a CommonJS export guard.
+- **Modify:** `background.js` â€” `importScripts('logic.js')` at the top; delete moved helpers; use `runBatched` in `createGroups`/`sleepInactive`; serialized session write queue, caps, quota retry; three new handlers `SESSION_DELETE`, `SESSION_ADD_TAB`, `SESSION_REMOVE_TAB`.
+- **Modify:** `popup.html` / `session.html` â€” add `<script src="logic.js"></script>` before the page script.
+- **Modify:** `popup.js` â€” use `clampSleepHours` from `logic.js`.
+- **Modify:** `session.js` â€” read sessions from storage with `onChanged` sync; all mutations via `chrome.runtime.sendMessage`; debounced search using `filterSessions`.
+- **Modify:** `test.js` â€” becomes a runner over `tests/*.test.js` (supports `node test.js <filter>`).
+- **Create:** `tests/helpers/chrome-stub.js` â€” shared chrome mock factory (moved from current `test.js`, extended with in-flight tracking, delays, failure injection, quota errors, `onChanged`).
 - **Create:** `tests/logic.test.js`, `tests/background.test.js`, `tests/dom.test.js`, `tests/load.test.js`.
 - **Create:** `package.json` (script `test: node test.js`, devDependency `jsdom`) and `.gitignore` (`node_modules/`, `.superpowers/`, `.worktrees/`).
-- **Modify:** `AGENTS.md` — update the File Structure section for `logic.js` and `tests/`.
+- **Modify:** `AGENTS.md` â€” update the File Structure section for `logic.js` and `tests/`.
 
-### Shared Interfaces (lock these names — later tasks depend on them)
+### Shared Interfaces (lock these names â€” later tasks depend on them)
 
 - `isRestorable(url) -> boolean`
 - `getDomain(url) -> string`
@@ -45,7 +45,7 @@
 - `runBatched(items, limit, op, onError) -> Promise<number>` (number of successful ops; `onError(err, item, index)` called for each failure; throws `RangeError` if `limit < 1`)
 - `DEFAULT_SLEEP_HOURS = 1`, `MAX_SAVED_SESSIONS = 50`, `MAX_TABS_PER_SESSION = 200`
 - Background handlers (via `HANDLERS` map, receive the message object as first arg): `SAVE_SESSION`, `SESSION_DELETE({sessionId})`, `SESSION_ADD_TAB({sessionId, tab})`, `SESSION_REMOVE_TAB({sessionId, index})`
-- Session identity: `s.id ?? s.date` — new sessions get `id` from `newSessionId()`; legacy sessions fall back to their `date` string.
+- Session identity: `s.id ?? s.date` â€” new sessions get `id` from `newSessionId()`; legacy sessions fall back to their `date` string.
 
 ---
 ### Task 1: Test scaffolding (runner, helpers, moved suite)
@@ -66,7 +66,7 @@
   "name": "easyorgmytabs",
   "version": "1.1.0",
   "private": true,
-  "description": "Tab Organizer Pro — Chrome extension",
+  "description": "Tab Organizer Pro â€” Chrome extension",
   "scripts": { "test": "node test.js" },
   "devDependencies": { "jsdom": "^26.0.0" }
 }
@@ -82,7 +82,7 @@ node_modules/
 - [ ] **Step 2: Write the runner `test.js`**
 
 ```js
-// test.js — runs every suite in tests/. Usage: node test.js [filter]
+// test.js â€” runs every suite in tests/. Usage: node test.js [filter]
 const fs = require('fs');
 
 async function main() {
@@ -118,14 +118,14 @@ Copy the `mockChrome` function from the current `test.js` verbatim into the help
 
 - [ ] **Step 4: Move the existing handler tests into `tests/background.test.js`**
 
-The current `test.js` body (the `assert` blocks from `isRestorable` through the final `arrangeByDate` assertions, plus the `main()` function) moves to `tests/background.test.js` unchanged — including the `eval(fs.readFileSync(path.join(__dirname, 'background.js'), 'utf8'))` loader and the `globalThis.chrome` setup — except:
+The current `test.js` body (the `assert` blocks from `isRestorable` through the final `arrangeByDate` assertions, plus the `main()` function) moves to `tests/background.test.js` unchanged â€” including the `eval(fs.readFileSync(path.join(__dirname, 'background.js'), 'utf8'))` loader and the `globalThis.chrome` setup â€” except:
 - Replace the local `mockChrome(...)` calls with `makeChromeStub(...)` from the helper.
-- Wrap everything in `module.exports = async function main() { ... }` (the trailing `console.log('ok')` goes away — the runner prints per-file results).
+- Wrap everything in `module.exports = async function main() { ... }` (the trailing `console.log('ok')` goes away â€” the runner prints per-file results).
 
 - [ ] **Step 5: Create an empty `tests/logic.test.js`**
 
 ```js
-// logic.test.js — pure helper tests (filled in from Task 2 onward)
+// logic.test.js â€” pure helper tests (filled in from Task 2 onward)
 module.exports = async function main() {
   console.log('(logic tests added in Task 2)');
 };
@@ -133,7 +133,7 @@ module.exports = async function main() {
 
 - [ ] **Step 6: Run `npm install` then `node test.js`**
 
-Expected: `ok   background.test.js` and `ok   logic.test.js`, final line `all tests passed`. If any assertion fails, the move was wrong — fix the move, do not touch production code.
+Expected: `ok   background.test.js` and `ok   logic.test.js`, final line `all tests passed`. If any assertion fails, the move was wrong â€” fix the move, do not touch production code.
 
 - [ ] **Step 7: Commit**
 
@@ -257,10 +257,10 @@ Expected: `FAIL logic.test.js` with `Cannot find module '../logic.js'`. The fail
 
 - [ ] **Step 3: Create `logic.js`**
 
-Move these definitions verbatim from `background.js` into `logic.js` (they are pure — no `chrome.*`, no DOM): `BLOCKED_SCHEMES`, `isRestorable`, `getDomain`, `getDateBucket`, `BUCKET_COLORS`, `TRACKING_PARAMS`, `dedupeKey`. Add these new pure helpers (do NOT add `runBatched` yet — that is Task 3):
+Move these definitions verbatim from `background.js` into `logic.js` (they are pure â€” no `chrome.*`, no DOM): `BLOCKED_SCHEMES`, `isRestorable`, `getDomain`, `getDateBucket`, `BUCKET_COLORS`, `TRACKING_PARAMS`, `dedupeKey`. Add these new pure helpers (do NOT add `runBatched` yet â€” that is Task 3):
 
 ```js
-// Shared pure helpers. No chrome.* or DOM references — safe for the service
+// Shared pure helpers. No chrome.* or DOM references â€” safe for the service
 // worker (importScripts), popup/dashboard (<script>), and Node tests (require).
 
 const BLOCKED_SCHEMES = [
@@ -406,7 +406,7 @@ git commit -m "refactor: extract pure helpers into shared logic.js"
 
 **Interfaces:**
 - Consumes: nothing (pure function).
-- Produces: `runBatched(items, limit, op, onError) -> Promise<number>` — starts items in order across `min(limit, items.length)` workers; `op(item, index)` may be async; each rejection is passed to `onError(err, item, index)` and does not abort the batch; resolves with the count of successful ops; `RangeError` if `limit < 1`.
+- Produces: `runBatched(items, limit, op, onError) -> Promise<number>` â€” starts items in order across `min(limit, items.length)` workers; `op(item, index)` may be async; each rejection is passed to `onError(err, item, index)` and does not abort the batch; resolves with the count of successful ops; `RangeError` if `limit < 1`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -443,7 +443,7 @@ Append to `tests/logic.test.js` inside `main()`:
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node test.js logic`
-Expected: `FAIL logic.test.js` — first failure is `L.runBatched is not a function` (feature missing). That is the expected RED.
+Expected: `FAIL logic.test.js` â€” first failure is `L.runBatched is not a function` (feature missing). That is the expected RED.
 
 - [ ] **Step 3: Implement `runBatched`**
 
@@ -473,7 +473,7 @@ async function runBatched(items, limit, op, onError = () => {}) {
 - [ ] **Step 4: Run the focused test**
 
 Run: `node test.js logic`
-Expected: `ok   logic.test.js`. Then run `node test.js` — everything green.
+Expected: `ok   logic.test.js`. Then run `node test.js` â€” everything green.
 
 - [ ] **Step 5: Commit**
 
@@ -491,7 +491,7 @@ git commit -m "feat: add runBatched concurrency limiter"
 
 **Interfaces:**
 - Consumes: `runBatched`, `DEFAULT_SLEEP_HOURS` from `logic.js`.
-- Produces: `sleepInactive()` — same message contract (returns slept count), but discards run through `runBatched` with limit 10.
+- Produces: `sleepInactive()` â€” same message contract (returns slept count), but discards run through `runBatched` with limit 10.
 
 - [ ] **Step 1: Extend the chrome stub with in-flight tracking**
 
@@ -530,7 +530,7 @@ Append to `tests/background.test.js`:
 - [ ] **Step 3: Run to verify it fails**
 
 Run: `node test.js background`
-Expected: `FAIL background.test.js` on `maxInFlight.discard > 1` — the current loop awaits each discard sequentially, so max in-flight is 1. This is the expected RED.
+Expected: `FAIL background.test.js` on `maxInFlight.discard > 1` â€” the current loop awaits each discard sequentially, so max in-flight is 1. This is the expected RED.
 
 - [ ] **Step 4: Implement the batched `sleepInactive`**
 
@@ -575,7 +575,7 @@ git commit -m "perf: batch tab discards in sleepInactive with runBatched"
 
 **Interfaces:**
 - Consumes: `runBatched` from `logic.js`.
-- Produces: `createGroups(entries) -> Promise<number>` — same contract (count of groups created), entries processed through `runBatched` with limit 5; per-entry failures logged and skipped.
+- Produces: `createGroups(entries) -> Promise<number>` â€” same contract (count of groups created), entries processed through `runBatched` with limit 5; per-entry failures logged and skipped.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -629,7 +629,7 @@ async function createGroups(entries) {
 
 - [ ] **Step 4: Make the existing arrange tests order-independent**
 
-The existing `arrangeByWebsite`/`arrangeByDate` assertions deep-compare `state.groups` in array order. With concurrency, creation order across groups is not guaranteed. Replace those assertions with order-independent comparisons — e.g. sort both sides by `title` before comparing, or build a `Map(title -> tabIds)`. Keep the tab-set assertions exact. For `arrangeByWebsite`, expected after sorting: `google.com -> [3]`, `youtube.com -> [1, 2]`. For `arrangeByDate`: `Today -> [2]`, `Older -> [1]` (sorted by title).
+The existing `arrangeByWebsite`/`arrangeByDate` assertions deep-compare `state.groups` in array order. With concurrency, creation order across groups is not guaranteed. Replace those assertions with order-independent comparisons â€” e.g. sort both sides by `title` before comparing, or build a `Map(title -> tabIds)`. Keep the tab-set assertions exact. For `arrangeByWebsite`, expected after sorting: `google.com -> [3]`, `youtube.com -> [1, 2]`. For `arrangeByDate`: `Today -> [2]`, `Older -> [1]` (sorted by title).
 
 - [ ] **Step 5: Run the focused test**
 
@@ -657,8 +657,8 @@ git commit -m "perf: batch tab-group creation with runBatched"
 - [ ] **Step 1: Extend the stub for quota failures and set latency**
 
 In `tests/helpers/chrome-stub.js`:
-- Add option `quotaFailures: number` — the next N `storage.local.set` calls reject with `new Error('Quota bytes exceeded')` before storing; later sets succeed.
-- Add option `setLatencyMs` (default 0) — `storage.local.set` awaits this delay before storing, so concurrent write interleavings are observable.
+- Add option `quotaFailures: number` â€” the next N `storage.local.set` calls reject with `new Error('Quota bytes exceeded')` before storing; later sets succeed.
+- Add option `setLatencyMs` (default 0) â€” `storage.local.set` awaits this delay before storing, so concurrent write interleavings are observable.
 - Add a `state.setCount` counter incremented on every `storage.local.set`.
 
 - [ ] **Step 2: Write the failing tests**
@@ -707,7 +707,7 @@ Append to `tests/background.test.js`:
 - [ ] **Step 3: Run to verify it fails**
 
 Run: `node test.js background`
-Expected: `FAIL` on the first new assertion — today there is no cap, no retry, and `saveSession` closes tabs even when storage rejects. Expected RED.
+Expected: `FAIL` on the first new assertion â€” today there is no cap, no retry, and `saveSession` closes tabs even when storage rejects. Expected RED.
 
 - [ ] **Step 4: Implement the storage layer in `background.js`**
 
@@ -845,7 +845,7 @@ Append to `tests/background.test.js`:
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node test.js background`
-Expected: `FAIL` — `HANDLERS.SESSION_DELETE is not a function`. Expected RED.
+Expected: `FAIL` â€” `HANDLERS.SESSION_DELETE is not a function`. Expected RED.
 
 - [ ] **Step 3: Implement the handlers**
 
@@ -932,7 +932,7 @@ git commit -m "feat: session mutation handlers in background, serialized writes"
 
 **Interfaces:**
 - Consumes: `filterSessions`, `isLinkable` from `logic.js`; background handlers from Task 7; `makeBrowserChromeStub` from the helper.
-- Produces: dashboard behavior — mutations via `chrome.runtime.sendMessage`, reload from storage after each mutation, `chrome.storage.onChanged` re-render, debounced search (150 ms), no direct `chrome.storage.local.set` in `session.js`.
+- Produces: dashboard behavior â€” mutations via `chrome.runtime.sendMessage`, reload from storage after each mutation, `chrome.storage.onChanged` re-render, debounced search (150 ms), no direct `chrome.storage.local.set` in `session.js`.
 
 - [ ] **Step 1: Add a browser-style chrome stub for DOM tests**
 
@@ -977,7 +977,7 @@ function makeBrowserChromeStub({ savedSessions = [] } = {}) {
 Create `tests/dom.test.js`:
 
 ```js
-// dom.test.js — jsdom tests for popup/session surfaces
+// dom.test.js â€” jsdom tests for popup/session surfaces
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -1095,7 +1095,7 @@ module.exports = async function main() {
 - [ ] **Step 3: Run to verify it fails**
 
 Run: `node test.js dom`
-Expected: `FAIL` — currently `session.js` writes storage directly and has no `onChanged` listener, no debounce, no messages; `popup.js` writes the raw clamped value inline. The failures must be behavior failures (missing re-render, no message sent, wrong status), not setup errors. If `jsdom` is missing, run `npm install` first.
+Expected: `FAIL` â€” currently `session.js` writes storage directly and has no `onChanged` listener, no debounce, no messages; `popup.js` writes the raw clamped value inline. The failures must be behavior failures (missing re-render, no message sent, wrong status), not setup errors. If `jsdom` is missing, run `npm install` first.
 
 - [ ] **Step 4: Update `session.html`**
 
@@ -1169,7 +1169,7 @@ Expected: `ok   dom.test.js`. If the `sessionId` literal differs (e.g. the fixtu
 
 - [ ] **Step 7: Run the full suite**
 
-Run: `node test.js` — all files green.
+Run: `node test.js` â€” all files green.
 
 - [ ] **Step 8: Commit**
 
@@ -1191,7 +1191,7 @@ git commit -m "fix: dashboard syncs via storage.onChanged, mutations through bac
 - [ ] **Step 1: Run the popup DOM tests (written in Task 8)**
 
 Run: `node test.js dom`
-Expected: `FAIL` on the popup sections — the popup still clamps inline and does not load `logic.js`. Expected RED.
+Expected: `FAIL` on the popup sections â€” the popup still clamps inline and does not load `logic.js`. Expected RED.
 
 - [ ] **Step 2: Update `popup.html`**
 
@@ -1224,7 +1224,7 @@ Expected: `ok`. (If `sleep-hours` is not the element id in `popup.html`, update 
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `node test.js` — all green.
+Run: `node test.js` â€” all green.
 
 - [ ] **Step 6: Commit**
 
@@ -1268,11 +1268,13 @@ Update `tests/background.test.js` to use it (delete its inline loader).
 Create `tests/load.test.js`:
 
 ```js
-// load.test.js — large-tab-set acceptance tests: counts, concurrency caps.
+// load.test.js â€” large-tab-set acceptance tests: counts, concurrency caps.
 const assert = require('assert');
 const { makeChromeStub } = require('./helpers/chrome-stub.js');
 const loadBackground = require('./helpers/load-background.js');
 
+const noop = { addListener() {} };
+globalThis.chrome = { runtime: { onMessage: noop }, commands: { onCommand: noop } };
 loadBackground();
 const HOUR = 60 * 60 * 1000;
 const hoursAgo = h => Date.now() - h * HOUR;
@@ -1315,17 +1317,14 @@ module.exports = async function main() {
   assert.strictEqual(removes[0][1].length, 150);
 
   // 40 consecutive saves: all land, newest first, unique ids.
-  state = makeChromeStub(
-    Array.from({ length: 40 }, (_, i) => ({ url: `https://seq${i}.com/`, title: `T${i}` })),
-    {},
-    { setLatencyMs: 1 }
-  );
+  const shared = {};
   for (let i = 0; i < 40; i++) {
+    state = makeChromeStub([{ url: `https://seq${i}.com/`, title: `T${i}` }], shared, { setLatencyMs: 1 });
     await saveSession();
   }
-  assert.strictEqual(state.stored.savedSessions.length, 40);
-  assert.strictEqual(state.stored.savedSessions[0].tabs[0].url, 'https://seq39.com/');
-  const ids = new Set(state.stored.savedSessions.map(s => s.id));
+  assert.strictEqual(shared.savedSessions.length, 40);
+  assert.strictEqual(shared.savedSessions[0].tabs[0].url, 'https://seq39.com/');
+  const ids = new Set(shared.savedSessions.map(s => s.id));
   assert.strictEqual(ids.size, 40);
 
   console.log('  load suite: 300-tab scenarios passed');
@@ -1335,11 +1334,11 @@ module.exports = async function main() {
 - [ ] **Step 3: Run the load tests**
 
 Run: `node test.js load`
-Expected: `ok   load.test.js`. (These assert behavior already implemented in Tasks 4–7; if any fail, the earlier task regressed — fix the regression, do not weaken the test.)
+Expected: `ok   load.test.js`. (These assert behavior already implemented in Tasks 4â€“7; if any fail, the earlier task regressed â€” fix the regression, do not weaken the test.)
 
 - [ ] **Step 4: Run the full suite**
 
-Run: `node test.js` — all five files green.
+Run: `node test.js` â€” all five files green.
 
 - [ ] **Step 5: Commit**
 
@@ -1356,14 +1355,14 @@ git commit -m "test: add 300-tab load acceptance suite"
 - Modify: `AGENTS.md`, `README.md` (only if it documents the test command or file structure)
 
 **Interfaces:**
-- Consumes: everything from Tasks 1–10.
+- Consumes: everything from Tasks 1â€“10.
 
 - [ ] **Step 1: Update `AGENTS.md`**
 
 In the File Structure section:
-- Add `logic.js` — "pure helpers shared by service worker (`importScripts`), popup/dashboard (`<script>`), and tests (`require`): `isRestorable`, `dedupeKey`, `getDomain`, `getDateBucket`, `isLinkable`, `clampSleepHours`, `filterSessions`, `newSessionId`, `runBatched`, session limits (`MAX_SAVED_SESSIONS`, `MAX_TABS_PER_SESSION`)."
-- Replace the `test.js` line with: "`test.js`: `node test.js [filter]` — runner over `tests/*.test.js` (logic, background, dom via jsdom, load)."
-- Add: "`tests/helpers/chrome-stub.js` — shared chrome mock; `tests/helpers/load-background.js` — background.js eval loader."
+- Add `logic.js` â€” "pure helpers shared by service worker (`importScripts`), popup/dashboard (`<script>`), and tests (`require`): `isRestorable`, `dedupeKey`, `getDomain`, `getDateBucket`, `isLinkable`, `clampSleepHours`, `filterSessions`, `newSessionId`, `runBatched`, session limits (`MAX_SAVED_SESSIONS`, `MAX_TABS_PER_SESSION`)."
+- Replace the `test.js` line with: "`test.js`: `node test.js [filter]` â€” runner over `tests/*.test.js` (logic, background, dom via jsdom, load)."
+- Add: "`tests/helpers/chrome-stub.js` â€” shared chrome mock; `tests/helpers/load-background.js` â€” background.js eval loader."
 - Note under background.js: "all `savedSessions` writes are serialized through `enqueueSessionWrite` in the service worker; the dashboard mutates via messages (`SESSION_DELETE`/`SESSION_ADD_TAB`/`SESSION_REMOVE_TAB`) and reads via `chrome.storage.onChanged`."
 - Note under session.html/session.js: "never writes storage directly."
 
@@ -1374,7 +1373,7 @@ Expected: `ok` for `background.test.js`, `dom.test.js`, `load.test.js`, `logic.t
 
 - [ ] **Step 3: Syntax check all production scripts**
 
-Run: `node --check background.js && node --check logic.js && node --check session.js && node --check popup.js` — all must exit 0.
+Run: `node --check background.js && node --check logic.js && node --check session.js && node --check popup.js` â€” all must exit 0.
 
 - [ ] **Step 4: Commit**
 
