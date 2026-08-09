@@ -1,7 +1,7 @@
 const container = document.getElementById('sessions-container');
 const statusEl = document.getElementById('status');
 const searchInput = document.getElementById('search');
-const { filterSessions, isLinkable } = window;
+const { filterSessions, isLinkable, sessionIdOf } = window;
 
 let sessions = [];
 
@@ -65,7 +65,7 @@ function linkRow(session, tab) {
   const remove = el('button', { className: 'delete-link-btn', title: 'Remove tab' }, icon(ICONS.close));
   remove.addEventListener('click', async () => {
     const index = session.tabs.indexOf(tab);
-    if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: session.id ?? session.date, index });
+    if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: sessionIdOf(session), index });
   });
 
   return el('div', { className: 'link-row' }, favicon, link, remove);
@@ -89,7 +89,7 @@ function addLinkForm(session) {
       return;
     }
     const tab = { title: new URL(url).hostname, url };
-    await mutate('SESSION_ADD_TAB', { sessionId: session.id ?? session.date, tab });
+    await mutate('SESSION_ADD_TAB', { sessionId: sessionIdOf(session), tab });
   });
 
   return form;
@@ -118,7 +118,7 @@ function sessionCard(session, visibleTabs) {
       }, 3000);
       return;
     }
-    await mutate('SESSION_DELETE', { sessionId: session.id ?? session.date });
+    await mutate('SESSION_DELETE', { sessionId: sessionIdOf(session) });
   });
 
   const count = session.tabs.length;

@@ -1,6 +1,6 @@
 importScripts('logic.js');
 function findSession(saved, sessionId) {
-  return saved.find(s => (s.id ?? s.date) === sessionId);
+  return saved.find(s => sessionIdOf(s) === sessionId);
 }
 
 async function sessionDelete(request = {}) {
@@ -8,7 +8,7 @@ async function sessionDelete(request = {}) {
   if (!sessionId) return 0;
   return enqueueSessionWrite(async () => {
     const saved = await readSavedSessions();
-    const next = saved.filter(s => (s.id ?? s.date) !== sessionId);
+    const next = saved.filter(s => sessionIdOf(s) !== sessionId);
     if (next.length === saved.length) return 0;
     await writeSavedSessions(applySessionCap(next));
     return 1;

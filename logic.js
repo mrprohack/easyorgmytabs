@@ -88,6 +88,9 @@ function filterSessions(sessions, query) {
     .filter(entry => !q || entry.tabs.length > 0);
 }
 
+function sessionIdOf(session) {
+  return session.id ?? session.date;
+}
 function newSessionId() {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -116,6 +119,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BLOCKED_SCHEMES, isRestorable, getDomain, getDateBucket, BUCKET_COLORS,
     TRACKING_PARAMS, dedupeKey, isLinkable, clampSleepHours, DEFAULT_SLEEP_HOURS,
-    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, runBatched
+    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, sessionIdOf, runBatched
   };
 }

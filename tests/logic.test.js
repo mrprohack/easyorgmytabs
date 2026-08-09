@@ -77,10 +77,16 @@ module.exports = async function main() {
   assert.strictEqual(typeof L.newSessionId(), 'string');
   assert.notStrictEqual(L.newSessionId(), L.newSessionId());
 
+  // sessionIdOf: id wins, legacy sessions fall back to their date
+  assert.strictEqual(L.sessionIdOf({ id: 'x1', date: 'd1' }), 'x1');
+  assert.strictEqual(L.sessionIdOf({ date: 'legacy-date' }), 'legacy-date');
+  assert.strictEqual(L.sessionIdOf({}), undefined);
+
   // constants
   assert.strictEqual(L.DEFAULT_SLEEP_HOURS, 1);
   assert.ok(L.MAX_SAVED_SESSIONS >= 1);
   assert.ok(L.MAX_TABS_PER_SESSION >= 1);
+
   // runBatched: concurrency capped at limit
   let active = 0, maxActive = 0, started = [];
   const delay = ms => new Promise(r => setTimeout(r, ms));
