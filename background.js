@@ -139,19 +139,47 @@ async function sleepInactive() {
     (err, id) => console.error(`Failed to discard tab ${id}:`, err)
   );
 }
+let sessionWriteChain = Promise.resolve();
+
+function enqueueSessionWrite(task) {
+  const run = sessionWriteChain.then(task, task);
+  sessionWriteChain = run.catch(() => {});
+  return run;
+}
+
+function applySessionCap(sessions) {
+  return sessions.slice(0, MAX_SAVED_SESSIONS);
+}
+
+async function readSavedSessions() {
+  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
+  return Array.isArray(savedSessions) ? savedSessions : [];
+}
+
+async function writeSavedSessions(sessions) {
+  try {
+    await chrome.storage.local.set({ savedSessions: sessions });
+  } catch (err) {
+    if (!/quota/i.test(String(err?.message || err))) throw err;
+    await chrome.storage.local.set({ savedSessions: applySessionCap(sessions).slice(0, Math.ceil(MAX_SAVED_SESSIONS / 2)) });
+  }
+}
 async function saveSession() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const tabsToSave = tabs.filter(t => !t.pinned && isRestorable(t.url));
   if (tabsToSave.length === 0) return 0;
 
   const sessionData = {
+    id: newSessionId(),
     date: new Date().toISOString(),
-    tabs: tabsToSave.map(t => ({ title: t.title || t.url, url: t.url }))
+    tabs: tabsToSave.slice(0, MAX_TABS_PER_SESSION).map(t => ({ title: t.title || t.url, url: t.url }))
   };
 
-  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
-  savedSessions.unshift(sessionData);
-  await chrome.storage.local.set({ savedSessions });
+  await enqueueSessionWrite(async () => {
+    const saved = await readSavedSessions();
+    saved.unshift(sessionData);
+    await writeSavedSessions(applySessionCap(saved));
+  });
 
   // Open the dashboard before closing anything, or saving every tab closes the window.
   await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
@@ -159,4 +187,3 @@ async function saveSession() {
 
   return tabsToSave.length;
 }
-

@@ -1,4 +1,4 @@
-﻿# Speed & Caching-Fix Implementation Plan
+# Speed & Caching-Fix Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -678,7 +678,7 @@ Append to `tests/background.test.js`:
   state = makeChromeStub(
     [{ url: 'https://a.com/', title: 'A' }],
     {},
-    { quotaFailures: 2 } // initial write fails, retry succeeds
+    { quotaFailures: 1 } // initial write fails, retry succeeds
   );
   assert.strictEqual(await saveSession(), 1);
   assert.deepStrictEqual(state.log, [

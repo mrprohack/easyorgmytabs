@@ -1,4 +1,4 @@
-// background.test.js ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â handler behavior tests via the chrome stub.
+// background.test.js ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â handler behavior tests via the chrome stub.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -185,4 +185,42 @@ module.exports = async function main() {
   } finally {
     console.error = origError;
   }
+  // saveSession caps the stored history at MAX_SAVED_SESSIONS, keeping newest.
+  const sharedStorage = {};
+  for (let i = 0; i < 60; i++) {
+    state = makeChromeStub([{ url: `https://cap${i}.com/`, title: `T${i}` }], sharedStorage);
+    assert.strictEqual(await saveSession(), 1);
+  }
+  assert.strictEqual(sharedStorage.savedSessions.length, 50);
+  assert.strictEqual(sharedStorage.savedSessions[0].tabs[0].url, 'https://cap59.com/');
+  assert.strictEqual(sharedStorage.savedSessions[49].tabs[0].url, 'https://cap10.com/');
+
+  // saveSession never closes tabs when the storage write fails.
+  state = makeChromeStub(
+    [{ url: 'https://a.com/', title: 'A' }],
+    {},
+    { quotaFailures: 1 } // initial write fails, retry succeeds
+  );
+  assert.strictEqual(await saveSession(), 1);
+  assert.deepStrictEqual(state.log, [
+    ['create', 'chrome-extension://test/session.html'],
+    ['remove', [1]]
+  ]);
+  assert.strictEqual(state.stored.savedSessions.length, 1);
+
+  // ...and when the retry also fails, nothing is closed and an error surfaces.
+  state = makeChromeStub(
+    [{ url: 'https://a.com/', title: 'A' }],
+    {},
+    { quotaFailures: 3 }
+  );
+  await assert.rejects(() => saveSession(), /quota/i);
+  assert.deepStrictEqual(state.log, []);
+  assert.strictEqual(state.stored.savedSessions, undefined);
+
+  // A session with more than MAX_TABS_PER_SESSION tabs is truncated on save.
+  const tooMany = Array.from({ length: 250 }, (_, i) => ({ url: `https://t${i}.com/`, title: `T${i}` }));
+  state = makeChromeStub(tooMany);
+  await saveSession();
+  assert.strictEqual(state.stored.savedSessions[0].tabs.length, 200);
 };
