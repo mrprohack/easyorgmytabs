@@ -1,4 +1,4 @@
-// background.test.js Ã¢â‚¬â€ handler behavior tests via the chrome stub.
+// background.test.js ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â handler behavior tests via the chrome stub.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -120,10 +120,13 @@ module.exports = async function main() {
     { url: 'https://pinned.com/', pinned: true }
   ]);
   assert.strictEqual(await arrangeByWebsite(), 2);
-  assert.deepStrictEqual(state.groups, [
-    { tabIds: [1, 2], title: 'youtube.com', collapsed: true, color: 'grey' },
-    { tabIds: [3], title: 'google.com', collapsed: true, color: 'blue' }
-  ]);
+  const websiteByTitle = new Map(state.groups.map(g => [g.title, g]));
+  assert.deepStrictEqual([...websiteByTitle.keys()].sort(), ['google.com', 'youtube.com']);
+  assert.deepStrictEqual(websiteByTitle.get('youtube.com').tabIds, [1, 2]);
+  assert.deepStrictEqual(websiteByTitle.get('youtube.com').collapsed, true);
+  assert.deepStrictEqual(websiteByTitle.get('youtube.com').color, 'grey');
+  assert.deepStrictEqual(websiteByTitle.get('google.com').tabIds, [3]);
+  assert.deepStrictEqual(websiteByTitle.get('google.com').color, 'blue');
 
   // Separate windows get separate groups.
   state = makeChromeStub([
@@ -139,8 +142,10 @@ module.exports = async function main() {
     { url: 'chrome://newtab', lastAccessed: hoursAgo(1) }
   ]);
   assert.strictEqual(await arrangeByDate(), 2);
-  assert.deepStrictEqual(state.groups.map(g => g.title), ['Today', 'Older']);
-  assert.deepStrictEqual(state.groups[0].tabIds, [2]);
+  const dateByTitle = new Map(state.groups.map(g => [g.title, g]));
+  assert.deepStrictEqual([...dateByTitle.keys()].sort(), ['Older', 'Today']);
+  assert.deepStrictEqual(dateByTitle.get('Today').tabIds, [2]);
+  assert.deepStrictEqual(dateByTitle.get('Older').tabIds, [1]);
   // sleepInactive discards in parallel batches of at most 10.
   state = makeChromeStub(
     Array.from({ length: 25 }, (_, i) => ({
@@ -153,4 +158,31 @@ module.exports = async function main() {
   assert.strictEqual(state.log.filter(([op]) => op === 'discard').length, 25);
   assert.ok(state.maxInFlight.discard > 1, 'discards should overlap');
   assert.ok(state.maxInFlight.discard <= 10, 'at most 10 concurrent discards');
+  // createGroups creates groups in parallel batches of at most 5.
+  const manyEntries = Array.from({ length: 20 }, (_, i) => ({
+    tabIds: [i + 1], title: `site${i}.com`, color: 'grey'
+  }));
+  state = makeChromeStub([], {}, { delayMs: 2 });
+  assert.strictEqual(await createGroups(manyEntries), 20);
+  assert.strictEqual(state.groups.length, 20);
+  assert.ok(state.maxInFlight.group > 1, 'group calls should overlap');
+  assert.ok(state.maxInFlight.group <= 5, 'at most 5 concurrent group calls');
+
+  // A failing group entry does not abort the batch and is not counted.
+  const origError = console.error;
+  const groupErrors = [];
+  console.error = (...args) => groupErrors.push(args);
+  try {
+    state = makeChromeStub([], {}, { failGroupIds: new Set([2]) });
+    const ok = await createGroups([
+      { tabIds: [1], title: 'ok.com', color: 'grey' },
+      { tabIds: [2], title: 'bad.com', color: 'grey' },
+      { tabIds: [3], title: 'fine.com', color: 'grey' }
+    ]);
+    assert.strictEqual(ok, 2);
+    assert.strictEqual(state.groups.length, 2);
+    assert.strictEqual(groupErrors.length, 1, 'the failure is logged once');
+  } finally {
+    console.error = origError;
+  }
 };

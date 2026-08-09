@@ -37,20 +37,17 @@ async function ungroupAllTabs() {
 
 // Groups tabIds under `title`, per window. Returns the number of groups created.
 async function createGroups(entries) {
-  let created = 0;
-  for (const { tabIds, title, color } of entries) {
-    if (!tabIds.length) continue;
-    try {
-      const groupId = await chrome.tabs.group({ tabIds });
-      await chrome.tabGroups.update(groupId, { title, collapsed: true, color });
-      created++;
-    } catch (e) {
-      console.error(`Failed to group tabs for "${title}":`, e);
-    }
-  }
-  return created;
+  const op = async (entry) => {
+    const groupId = await chrome.tabs.group({ tabIds: entry.tabIds });
+    await chrome.tabGroups.update(groupId, { title: entry.title, collapsed: true, color: entry.color });
+  };
+  return runBatched(
+    entries,
+    5,
+    op,
+    (err, entry) => console.error(`Failed to group tabs for "${entry.title}":`, err)
+  );
 }
-
 async function arrangeByWebsite() {
   const tabs = await ungroupAllTabs();
 
