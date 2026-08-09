@@ -11,7 +11,7 @@ A premium Chrome extension (Manifest V3) that organizes messy browser tabs into 
 ### Power tools
 - **Close Duplicates** - closes duplicate tabs in the current window after stripping URL fragments and tracking parameters (utm_*, fbclid, gclid, msclkid, mc_eid). Keeps the pinned copy, then the active one, then the first; pinned tabs are never closed.
 - **Sleep Inactive Tabs** - discards idle tabs in the current window to free memory. Threshold is configurable (0.25-168 hours, default 1). Never sleeps pinned, audible, or active tabs.
-- **Save Session** - saves every non-pinned, restorable tab in the current window as a session, opens the dashboard, then closes the tabs.
+- **Save Session** - saves every non-pinned, restorable tab in the current window as a session and opens the dashboard; your tabs stay open.
 - **Session Dashboard** - a full-page dashboard to search, restore, add links to, or delete saved sessions. Restore reopens all tabs in a fresh window.
 
 ### Keyboard shortcuts

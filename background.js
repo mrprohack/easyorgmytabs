@@ -225,9 +225,9 @@ async function saveSession() {
     await writeSavedSessions(applySessionCap(saved));
   });
 
-  // Open the dashboard before closing anything, or saving every tab closes the window.
+  // Open the dashboard so the new session is visible immediately;
+  // tabs stay open - saving never closes them.
   await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
-  await chrome.tabs.remove(tabsToSave.map(t => t.id));
 
   return tabsToSave.length;
 }

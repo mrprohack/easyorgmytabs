@@ -26,7 +26,7 @@
 - **Date buckets** (from `getDateBucket`): `Today`, `This Week`, `Last Week`, `This Month`, `Older`, plus `Unknown` (missing/invalid `lastAccessed`). Note: no "Yesterday" bucket.
 - **Skipped tabs:** pinned tabs are never grouped/slept/closed; tabs with non-restorable schemes (`chrome:`, `chrome-extension:`, `edge:`, `about:`, `devtools:`, `view-source:`, … — see `BLOCKED_SCHEMES`/`isRestorable`) are ignored for grouping and session-saving.
 - **Close Duplicates:** strips the URL fragment plus tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`) before comparing; keeps pinned copy → active copy → first; never closes a pinned tab.
-- **Save Session ordering matters:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, **opens the dashboard first, then closes the tabs** — closing first would close the whole window.
+- **Save Session:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, and opens the dashboard. **Tabs are never closed by saving.**
 - **Sleep rules:** never sleeps pinned tabs, audible tabs, or the active tab.
 
 

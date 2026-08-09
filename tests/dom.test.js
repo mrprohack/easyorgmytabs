@@ -116,6 +116,19 @@ module.exports = async function main() {
   const failStatus = dom.window.document.getElementById('status');
   assert.strictEqual(failStatus.textContent, 'Storage read failed');
 
+
+  // regression: logic.js + session.js run in ONE shared scope in a real browser.
+  // A later const destructuring of a logic.js function name is a SyntaxError there.
+  const logicSrc = fs.readFileSync(path.join(ROOT, 'logic.js'), 'utf8');
+  const sessionSrc = fs.readFileSync(path.join(ROOT, 'session.js'), 'utf8');
+  const popupSrc = fs.readFileSync(path.join(ROOT, 'popup.js'), 'utf8');
+  const scopeDom = new JSDOM('<!doctype html><p id="status"></p><input id="search"><input id="sleep-hours"><div id="sessions-container"></div>', {
+    url: 'chrome-extension://test/',
+    runScripts: 'outside-only',
+    beforeParse(window) { window.chrome = makeBrowserChromeStub(); }
+  });
+  assert.doesNotThrow(() => scopeDom.window.eval(logicSrc + '\n' + sessionSrc), 'session.js must not redeclare logic.js names');
+  assert.doesNotThrow(() => scopeDom.window.eval(logicSrc + '\n' + popupSrc), 'popup.js must not redeclare logic.js names');
   // error-report: uncaught errors and rejections show in the status line
   dom = await loadPage('session.html', ['error-report.js', 'logic.js', 'session.js'], makeBrowserChromeStub({ savedSessions: [] }));
   const erStatus = dom.window.document.getElementById('status');

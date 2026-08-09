@@ -66,7 +66,7 @@ module.exports = async function main() {
   assert.strictEqual(await closeDuplicates(), 1);
   assert.deepStrictEqual(state.log, [['remove', [3]]]);
 
-  // saveSession opens the dashboard before closing anything.
+  // saveSession opens the dashboard and keeps every tab open.
   state = makeChromeStub([
     { url: 'https://a.com/', title: 'A' },
     { url: 'https://b.com/', title: 'B', pinned: true },
@@ -76,10 +76,8 @@ module.exports = async function main() {
     { url: 'devtools://devtools/inspector.html', title: 'DevTools' }
   ]);
   assert.strictEqual(await saveSession(), 1);
-  assert.deepStrictEqual(state.log, [
-    ['create', 'chrome-extension://test/session.html'],
-    ['remove', [1]]
-  ]);
+  assert.deepStrictEqual(state.log, [['create', 'chrome-extension://test/session.html']]);
+  assert.strictEqual(state.tabs.length, 6, 'tabs stay open after saving');
   assert.deepStrictEqual(state.stored.savedSessions[0].tabs, [{ title: 'A', url: 'https://a.com/' }]);
 
   // Nothing saveable: no dashboard, no closed tabs.
@@ -207,10 +205,7 @@ module.exports = async function main() {
     { quotaFailures: 1 } // initial write fails, retry succeeds
   );
   assert.strictEqual(await saveSession(), 1);
-  assert.deepStrictEqual(state.log, [
-    ['create', 'chrome-extension://test/session.html'],
-    ['remove', [1]]
-  ]);
+  assert.deepStrictEqual(state.log, [['create', 'chrome-extension://test/session.html']]);
   assert.strictEqual(state.stored.savedSessions.length, 1);
 
   // ...and when the retry also fails, nothing is closed and an error surfaces.

@@ -64,7 +64,6 @@ function initPopup() {
   if (!sleepHoursInput) return;
 
   // Sleep threshold, shared with background.js via chrome.storage.sync.
-  const { clampSleepHours } = window;
   chrome.storage.sync.get('sleepHours').then(({ sleepHours = 1 }) => {
     sleepHoursInput.value = sleepHours;
   }).catch((err) => {

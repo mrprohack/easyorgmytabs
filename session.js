@@ -1,7 +1,6 @@
 const container = document.getElementById('sessions-container');
 const statusEl = document.getElementById('status');
 const searchInput = document.getElementById('search');
-const { filterSessions, isLinkable, sessionIdOf } = window;
 
 let sessions = [];
 
