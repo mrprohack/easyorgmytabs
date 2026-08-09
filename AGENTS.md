@@ -9,7 +9,7 @@
 - Run `node test.js` after any change to `background.js`, `test.js`, or popup/session status text.
 
 ## Architecture & Responsibilities
-- `manifest.json`: MV3, permissions `tabs`, `tabGroups`, `storage`, `favicon`. Version 1.1.
+- `manifest.json`: MV3, permissions `tabs`, `tabGroups`, `storage`, `favicon`. Version 1.0.
 - `background.js`: service worker; ALL tab manipulation lives here. Every action is an async function in the `HANDLERS` map (line 1) that returns a count, or rejects.
 - `popup.html`/`popup.js`: sends `{ action }` messages, disables buttons while working, renders the returned count via `RESULT_TEXT` (singular/plural/none per action). Also holds the `sleepHours` threshold input.
 - `session.html`/`session.js`: dashboard for saved sessions (restore/delete/add links/search).
