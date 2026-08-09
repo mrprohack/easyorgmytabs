@@ -7,7 +7,8 @@
     "tabs",
     "tabGroups",
     "storage",
-    "favicon"
+    "favicon",
+    "sessions"
   ],
   "icons": {
     "16": "icon16.png",
@@ -30,16 +31,34 @@
   },
   "commands": {
     "ARRANGE_BY_DATE": {
-      "suggested_key": { "default": "Alt+Shift+D" },
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
       "description": "Arrange tabs by date"
     },
     "ARRANGE_BY_WEBSITE": {
-      "suggested_key": { "default": "Alt+Shift+W" },
+      "suggested_key": {
+        "default": "Alt+Shift+W"
+      },
       "description": "Arrange tabs by website"
     },
     "CLOSE_DUPLICATES": {
-      "suggested_key": { "default": "Alt+Shift+X" },
+      "suggested_key": {
+        "default": "Alt+Shift+X"
+      },
       "description": "Close duplicate tabs"
+    },
+    "SLEEP_INACTIVE": {
+      "description": "Sleep inactive tabs"
+    },
+    "SAVE_SESSION": {
+      "description": "Save session"
+    },
+    "VIEW_SESSIONS": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "View saved sessions"
     }
   }
 }

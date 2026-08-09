@@ -9,7 +9,7 @@
 - Run `node test.js` after any change to `background.js`, `test.js`, or popup/session status text.
 
 ## Architecture & Responsibilities
-- `manifest.json`: MV3, permissions `tabs`, `tabGroups`, `storage`, `favicon`. Version 1.0.
+- `manifest.json`: MV3, permissions `tabs`, `tabGroups`, `storage`, `favicon`, `sessions`. Version 1.0.
 - `background.js`: service worker; ALL tab manipulation lives here. Every action is an async function in the `HANDLERS` map (line 1) that returns a count, or rejects.
 - `popup.html`/`popup.js`: sends `{ action }` messages, disables buttons while working, renders the returned count via `RESULT_TEXT` (singular/plural/none per action). Also holds the `sleepHours` threshold input.
 - `session.html`/`session.js`: dashboard for saved sessions (restore/delete/add links/search).
@@ -18,14 +18,16 @@
 ## Wiring Rules (easy to miss)
 - **New action = 3 edits:** `background.js` `HANDLERS` + `popup.js` `ACTIONS` map + `popup.js` `RESULT_TEXT`. Missing any one fails silently (popup gets an empty reply and shows the "none" message).
 - Reply contract: `{ status: 'done', count }` or `{ status: 'error', error }`; the listener returns `true` for async.
-- **Keyboard shortcuts only exist for 3 of 5 actions:** `ARRANGE_BY_DATE` (Alt+Shift+D), `ARRANGE_BY_WEBSITE` (Alt+Shift+W), `CLOSE_DUPLICATES` (Alt+Shift+X). `chrome.commands.onCommand` dispatches command names straight into `HANDLERS`, so any new command name must match a handler name exactly.
+- **Keyboard shortcuts:** `ARRANGE_BY_DATE` (Alt+Shift+D), `ARRANGE_BY_WEBSITE` (Alt+Shift+W), `CLOSE_DUPLICATES` (Alt+Shift+X), `VIEW_SESSIONS` (Alt+Shift+S). `SLEEP_INACTIVE` and `SAVE_SESSION` are assignable but have no suggested key. `chrome.commands.onCommand` dispatches command names straight into `HANDLERS`, so any new command name must match a handler name exactly.
 - Saved sessions live in `chrome.storage.local.savedSessions` (array of `{date, tabs:[{title,url}]}`); the sleep threshold lives in `chrome.storage.sync.sleepHours` (default 1, clamped 0.25–168 by the popup).
 
 ## Behavior Gotchas
 - **Scopes differ per action:** `ARRANGE_BY_*` group tabs **across all windows** (ungrouping every non-pinned tab in every window first, per-window groups); `CLOSE_DUPLICATES`, `SLEEP_INACTIVE`, and `SAVE_SESSION` are **current-window only**.
 - **Date buckets** (from `getDateBucket`): `Today`, `This Week`, `Last Week`, `This Month`, `Older`, plus `Unknown` (missing/invalid `lastAccessed`). Note: no "Yesterday" bucket.
 - **Skipped tabs:** pinned tabs are never grouped/slept/closed; tabs with non-restorable schemes (`chrome:`, `chrome-extension:`, `edge:`, `about:`, `devtools:`, `view-source:`, … — see `BLOCKED_SCHEMES`/`isRestorable`) are ignored for grouping and session-saving.
-- **Close Duplicates:** strips the URL fragment plus tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`) before comparing; keeps pinned copy → active copy → first; never closes a pinned tab.
+- **Close Duplicates:** strips the URL fragment plus tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`) before comparing; keeps pinned copy → active copy → first; never closes a pinned tab. `duplicateIdsToRemove` in `logic.js` is the pure core used by both the action and the popup preview.
+- **Undo Close:** `UNDO_CLOSE` restores the most recently closed tab/window via `chrome.sessions.restore()` (needs the `sessions` permission).
+- **Popup preview:** `PREVIEW` returns `{ duplicates, idle }` counts without mutating anything.
 - **Save Session:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, and opens the dashboard. **Tabs are never closed by saving.**
 - **Sleep rules:** never sleeps pinned tabs, audible tabs, or the active tab.
 

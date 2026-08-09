@@ -1,4 +1,31 @@
 importScripts('logic.js');
+
+async function viewSessions() {
+  await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
+  return 1;
+}
+
+async function undoClose() {
+  try {
+    await chrome.sessions.restore();
+    return 1;
+  } catch (e) {
+    return 0;
+  }
+}
+
+async function previewCounts() {
+  const { sleepHours = DEFAULT_SLEEP_HOURS } = await chrome.storage.sync.get('sleepHours');
+  const [tabs, inactive] = await Promise.all([
+    chrome.tabs.query({ currentWindow: true }),
+    chrome.tabs.query({ currentWindow: true, active: false, discarded: false })
+  ]);
+  const cutoff = Date.now() - sleepHours * 60 * 60 * 1000;
+  return {
+    duplicates: duplicateIdsToRemove(tabs).length,
+    idle: inactive.filter(t => !t.audible && !t.pinned && t.lastAccessed && t.lastAccessed <= cutoff).length
+  };
+}
 function findSession(saved, sessionId) {
   return saved.find(s => sessionIdOf(s) === sessionId);
 }
@@ -49,7 +76,10 @@ const HANDLERS = {
   SAVE_SESSION: saveSession,
   SESSION_DELETE: sessionDelete,
   SESSION_ADD_TAB: sessionAddTab,
-  SESSION_REMOVE_TAB: sessionRemoveTab
+  SESSION_REMOVE_TAB: sessionRemoveTab,
+  VIEW_SESSIONS: viewSessions,
+  UNDO_CLOSE: undoClose,
+  PREVIEW: previewCounts
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -147,22 +177,7 @@ async function arrangeByDate() {
 
 async function closeDuplicates() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
-
-  const byUrl = new Map();
-  for (const tab of tabs) {
-    const key = dedupeKey(tab.url);
-    if (!byUrl.has(key)) byUrl.set(key, []);
-    byUrl.get(key).push(tab);
-  }
-
-  const tabsToRemove = [];
-  for (const copies of byUrl.values()) {
-    if (copies.length < 2) continue;
-    // Keep the pinned copy if there is one, then the active one, then whatever came first.
-    const keeper = copies.find(t => t.pinned) || copies.find(t => t.active) || copies[0];
-    tabsToRemove.push(...copies.filter(t => t !== keeper && !t.pinned).map(t => t.id));
-  }
-
+  const tabsToRemove = duplicateIdsToRemove(tabs);
   if (tabsToRemove.length > 0) {
     await chrome.tabs.remove(tabsToRemove);
   }

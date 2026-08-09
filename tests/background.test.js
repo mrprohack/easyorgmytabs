@@ -223,6 +223,29 @@ module.exports = async function main() {
   state = makeChromeStub(tooMany);
   await saveSession();
   assert.strictEqual(state.stored.savedSessions[0].tabs.length, 200);
+  // VIEW_SESSIONS opens the dashboard from a keyboard command.
+  state = makeChromeStub([]);
+  assert.strictEqual(await HANDLERS.VIEW_SESSIONS(), 1);
+  assert.deepStrictEqual(state.log, [['create', 'chrome-extension://test/session.html']]);
+
+  // UNDO_CLOSE restores the most recently closed tab/window.
+  state = makeChromeStub([]);
+  assert.strictEqual(await HANDLERS.UNDO_CLOSE(), 1);
+  assert.deepStrictEqual(state.log, [['restore']]);
+
+  // UNDO_CLOSE with nothing to restore reports 0.
+  state = makeChromeStub([], {}, { noSessions: true });
+  assert.strictEqual(await HANDLERS.UNDO_CLOSE(), 0);
+
+  // PREVIEW reports duplicate and idle counts without changing anything.
+  state = makeChromeStub([
+    { url: 'https://dup.com/' },
+    { url: 'https://dup.com/?utm_source=x' },
+    { url: 'https://idle.com/', lastAccessed: hoursAgo(5) },
+    { url: 'https://recent.com/', lastAccessed: hoursAgo(1) }
+  ], { sleepHours: 2 });
+  assert.deepStrictEqual(await previewCounts(), { duplicates: 1, idle: 1 });
+  assert.deepStrictEqual(state.log, [], 'preview never mutates tabs');
   // SESSION_DELETE removes the matching session (id or legacy date).
   state = makeChromeStub([], { savedSessions: [
     { id: 'x1', date: 'd1', tabs: [{ title: 'A', url: 'https://a.com/' }] },

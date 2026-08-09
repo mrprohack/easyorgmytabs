@@ -10,9 +10,10 @@ A premium Chrome extension (Manifest V3) that organizes messy browser tabs into 
 
 ### Power tools
 - **Close Duplicates** - closes duplicate tabs in the current window after stripping URL fragments and tracking parameters (utm_*, fbclid, gclid, msclkid, mc_eid). Keeps the pinned copy, then the active one, then the first; pinned tabs are never closed.
+- **Undo Close** - restores the most recently closed tab or window (chrome.sessions).
 - **Sleep Inactive Tabs** - discards idle tabs in the current window to free memory. Threshold is configurable (0.25-168 hours, default 1). Never sleeps pinned, audible, or active tabs.
 - **Save Session** - saves every non-pinned, restorable tab in the current window as a session and opens the dashboard; your tabs stay open.
-- **Session Dashboard** - a full-page dashboard to search, restore, add links to, or delete saved sessions. Restore reopens all tabs in a fresh window. The popup's **View Saved Sessions** button opens the dashboard anytime.
+- **Session Dashboard** - a full-page dashboard to search, restore, add links to, or delete saved sessions. Restore reopens all tabs in a fresh window, or **Restore here** reopens them in the current window. The popup's **View Saved Sessions** button opens the dashboard anytime.
 
 ### Keyboard shortcuts
 | Shortcut | Action |
@@ -20,6 +21,7 @@ A premium Chrome extension (Manifest V3) that organizes messy browser tabs into 
 | Alt+Shift+D | Arrange by Date |
 | Alt+Shift+W | Arrange by Website |
 | Alt+Shift+X | Close Duplicates |
+| Alt+Shift+S | View Saved Sessions |
 
 ## Installation
 
@@ -33,7 +35,7 @@ The extension installs via Developer Mode in Chrome:
 
 ## Usage
 
-- Click the extension icon to open the popup, then pick an action; the status line reports what happened.
+- Click the extension icon to open the popup, then pick an action; the status line reports what happened. On open, the popup previews how many duplicates and idle tabs are ready.
 - Set the sleep threshold with the **idle over ... hours** field in the popup.
 - Saved sessions appear in the dashboard (session.html). Use the search box to filter tabs, the trash button to delete a session (two-step confirm), and the form to paste in a link manually.
 

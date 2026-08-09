@@ -101,6 +101,18 @@ function sessionCard(session, visibleTabs) {
     if (urls.length) chrome.windows.create({ url: urls });
   });
 
+  // Restore here: reopen the session into the dashboard's own window.
+  const restoreHere = el('button', { className: 'btn btn-restore-here' }, icon(ICONS.restore), 'Restore here');
+  restoreHere.addEventListener('click', async () => {
+    const urls = session.tabs.map(t => t.url).filter(isLinkable);
+    if (!urls.length) return;
+    for (const url of urls) {
+      await chrome.tabs.create({ url });
+    }
+    statusEl.textContent = `Opened ${urls.length} tab${urls.length === 1 ? '' : 's'} in this window.`;
+    statusEl.classList.remove('error');
+  });
+
   // Inline two-step confirm instead of a browser dialog.
   const removeLabel = el('span', { textContent: 'Delete' });
   const remove = el('button', { className: 'btn btn-danger' }, icon(ICONS.trash), removeLabel);
@@ -128,7 +140,7 @@ function sessionCard(session, visibleTabs) {
       })
     }),
     el('p', { className: 'meta', textContent: `${count} tab${count === 1 ? '' : 's'}` }),
-    el('div', { className: 'btn-row' }, restore, remove),
+    el('div', { className: 'btn-row' }, restore, restoreHere, remove),
     el('div', { className: 'links-list' }, ...visibleTabs.map(tab => linkRow(session, tab))),
     addLinkForm(session)
   );

@@ -74,6 +74,23 @@ module.exports = async function main() {
   assert.strictEqual(messages[0].tab.title, 'new.com');
   assert.strictEqual(messages[0].tab.url, 'https://new.com/');
 
+
+  // dashboard: Restore here opens linkable tabs in the current window
+  const hereStub = makeBrowserChromeStub({
+    savedSessions: [{ date: '2026-08-09T10:00:00.000Z', tabs: [
+      { title: 'A', url: 'https://a.com/' },
+      { title: 'bad', url: 'javascript:alert(1)' },
+      { title: 'B', url: 'https://b.com/' }
+    ]}]
+  });
+  dom = await loadPage('session.html', ['error-report.js', 'logic.js', 'session.js'], hereStub);
+  const hereStatus = dom.window.document.getElementById('status');
+  const hereBtn = dom.window.document.querySelector('.btn-restore-here');
+  assert.ok(hereBtn, 'restore-here button exists');
+  hereBtn.click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(hereStub._stored._created, ['https://a.com/', 'https://b.com/']);
+  assert.strictEqual(hereStatus.textContent, 'Opened 2 tabs in this window.');
   // dashboard: two-step delete confirm, then SESSION_DELETE
   const deleteStub = makeBrowserChromeStub({
     savedSessions: [{ date: '2026-08-09T10:00:00.000Z', tabs: [{ title: 'A', url: 'https://a.com/' }] }]
@@ -140,6 +157,29 @@ module.exports = async function main() {
   dom.window.dispatchEvent(rejection);
   assert.strictEqual(erStatus.textContent, 'Rejecto');
 
+
+  // popup: Undo Close sends UNDO_CLOSE and reports the result
+  const undoStub = makeBrowserChromeStub();
+  const undoLog = [];
+  undoStub.runtime.sendMessage = async (msg) => { undoLog.push(msg); return { status: 'done', count: 1 }; };
+  dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], undoStub);
+  const undoStatus = dom.window.document.getElementById('status');
+  const undoBtn = dom.window.document.getElementById('btn-undo');
+  assert.ok(undoBtn, 'undo button exists');
+  undoBtn.click();
+  await new Promise(r => setTimeout(r, 10));
+  const undoMessages = undoLog.filter(m => m.action === 'UNDO_CLOSE');
+  assert.strictEqual(undoMessages.length, 1);
+  assert.strictEqual(undoMessages[0].action, 'UNDO_CLOSE');
+  assert.strictEqual(undoStatus.textContent, '1 tab restored.');
+
+  // popup: preview counts render into the status line on open
+  const previewStub = makeBrowserChromeStub();
+  previewStub.runtime.sendMessage = async (msg) => msg.action === 'PREVIEW' ? { status: 'done', count: { duplicates: 3, idle: 2 } } : { status: 'done', count: 1 };
+  dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], previewStub);
+  await new Promise(r => setTimeout(r, 10));
+  const previewStatus = dom.window.document.getElementById('status');
+  assert.strictEqual(previewStatus.textContent, '3 duplicates · 2 idle tabs');
   // popup: View Saved Sessions opens the dashboard and closes the popup
   const viewStub = makeBrowserChromeStub();
   let closed = false;

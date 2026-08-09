@@ -2,6 +2,7 @@ const ACTIONS = {
   'btn-date': 'ARRANGE_BY_DATE',
   'btn-website': 'ARRANGE_BY_WEBSITE',
   'btn-dedupe': 'CLOSE_DUPLICATES',
+  'btn-undo': 'UNDO_CLOSE',
   'btn-sleep': 'SLEEP_INACTIVE',
   'btn-session': 'SAVE_SESSION'
 };
@@ -11,6 +12,7 @@ const RESULT_TEXT = {
   ARRANGE_BY_DATE: ['group', 'groups', 'Nothing to arrange.'],
   ARRANGE_BY_WEBSITE: ['group', 'groups', 'Nothing to arrange.'],
   CLOSE_DUPLICATES: ['duplicate closed', 'duplicates closed', 'No duplicates found.'],
+  UNDO_CLOSE: ['tab restored', 'tabs restored', 'Nothing to restore.'],
   SLEEP_INACTIVE: ['tab slept', 'tabs slept', 'No idle tabs to sleep.'],
   SAVE_SESSION: ['tab saved', 'tabs saved', 'No tabs to save.']
 };
@@ -60,6 +62,13 @@ function initPopup() {
   for (const [id, action] of Object.entries(ACTIONS)) {
     document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
   }
+
+  // Preview: show duplicate/idle counts when the popup opens.
+  chrome.runtime.sendMessage({ action: 'PREVIEW' }).then((response) => {
+    if (response?.status === 'done' && response.count && typeof response.count === 'object') {
+      setStatus(`${response.count.duplicates} duplicates · ${response.count.idle} idle tabs`);
+    }
+  }).catch(() => {});
 
   // View Saved Sessions opens the dashboard in a new tab (no background round-trip).
   document.getElementById('btn-view-sessions')?.addEventListener('click', () => {

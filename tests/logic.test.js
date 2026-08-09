@@ -77,6 +77,28 @@ module.exports = async function main() {
   assert.strictEqual(typeof L.newSessionId(), 'string');
   assert.notStrictEqual(L.newSessionId(), L.newSessionId());
 
+
+  // duplicateIdsToRemove: same rules as closeDuplicates, pure
+  assert.deepStrictEqual(L.duplicateIdsToRemove([]), []);
+  const tabs = [
+    { id: 1, url: 'https://a.com/x' },
+    { id: 2, url: 'https://a.com/x#frag' },
+    { id: 3, url: 'https://a.com/x?utm_source=news', pinned: true },
+    { id: 4, url: 'https://b.com/' },
+    { id: 5, url: 'https://b.com/?id=1' }
+  ];
+  assert.deepStrictEqual(L.duplicateIdsToRemove(tabs), [1, 2]);
+  const activeCopy = [
+    { id: 1, url: 'https://a.com/x' },
+    { id: 2, url: 'https://a.com/x', active: true }
+  ];
+  assert.deepStrictEqual(L.duplicateIdsToRemove(activeCopy), [1]);
+  const twoPinned = [
+    { id: 1, url: 'https://a.com/x', pinned: true },
+    { id: 2, url: 'https://a.com/x', pinned: true },
+    { id: 3, url: 'https://a.com/x' }
+  ];
+  assert.deepStrictEqual(L.duplicateIdsToRemove(twoPinned), [3]);
   // sessionIdOf: id wins, legacy sessions fall back to their date
   assert.strictEqual(L.sessionIdOf({ id: 'x1', date: 'd1' }), 'x1');
   assert.strictEqual(L.sessionIdOf({ date: 'legacy-date' }), 'legacy-date');

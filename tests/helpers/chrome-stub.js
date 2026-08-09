@@ -40,6 +40,13 @@ function makeChromeStub(tabs, stored = {}, opts = {}) {
     tabGroups: {
       async update(groupId, props) { Object.assign(state.groups[groupId - 1], props); }
     },
+    sessions: {
+      async restore() {
+        if (opts.noSessions) throw new Error('No recently closed sessions');
+        state.log.push(['restore']);
+        return {};
+      }
+    },
     tabs: {
       async query(filter = {}) {
         return state.tabs.filter(tab => Object.entries(filter).every(([key, value]) =>

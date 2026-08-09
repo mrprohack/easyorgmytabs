@@ -89,6 +89,23 @@ function filterSessions(sessions, query) {
     .filter(entry => !q || entry.tabs.length > 0);
 }
 
+// Returns the tab ids that closeDuplicates would remove, without touching tabs.
+function duplicateIdsToRemove(tabs) {
+  const byUrl = new Map();
+  for (const tab of tabs) {
+    const key = dedupeKey(tab.url);
+    if (!byUrl.has(key)) byUrl.set(key, []);
+    byUrl.get(key).push(tab);
+  }
+  const ids = [];
+  for (const copies of byUrl.values()) {
+    if (copies.length < 2) continue;
+    // Keep the pinned copy if there is one, then the active one, then whatever came first.
+    const keeper = copies.find(t => t.pinned) || copies.find(t => t.active) || copies[0];
+    ids.push(...copies.filter(t => t !== keeper && !t.pinned).map(t => t.id));
+  }
+  return ids;
+}
 function sessionIdOf(session) {
   return session.id ?? session.date;
 }
@@ -120,6 +137,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BLOCKED_SCHEMES, isRestorable, getDomain, getDateBucket, BUCKET_COLORS,
     TRACKING_PARAMS, dedupeKey, isLinkable, clampSleepHours, DEFAULT_SLEEP_HOURS,
-    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, sessionIdOf, runBatched
+    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, sessionIdOf, duplicateIdsToRemove, runBatched
   };
 }
