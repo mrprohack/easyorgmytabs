@@ -25,7 +25,7 @@ function setStatus(text, isError = false) {
 
 async function triggerAction(action) {
   buttons.forEach(b => b.disabled = true);
-  setStatus('Working…');
+  setStatus('Workingâ€¦');
   try {
     const response = await chrome.runtime.sendMessage({ action });
     const [one, many, none] = RESULT_TEXT[action];
@@ -49,13 +49,14 @@ for (const [id, action] of Object.entries(ACTIONS)) {
 
 // Sleep threshold, shared with background.js via chrome.storage.sync.
 const sleepHoursInput = document.getElementById('sleep-hours');
+const { clampSleepHours } = window;
 
 chrome.storage.sync.get('sleepHours').then(({ sleepHours = 1 }) => {
   sleepHoursInput.value = sleepHours;
 });
 
 sleepHoursInput.addEventListener('change', async () => {
-  const hours = Math.min(168, Math.max(0.25, Number(sleepHoursInput.value) || 1));
+  const hours = clampSleepHours(sleepHoursInput.value);
   sleepHoursInput.value = hours;
   await chrome.storage.sync.set({ sleepHours: hours });
   setStatus(`Sleeping tabs idle over ${hours}h.`);

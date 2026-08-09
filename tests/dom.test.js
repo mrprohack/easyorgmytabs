@@ -1,4 +1,4 @@
-// dom.test.js Ã¢â‚¬â€ jsdom tests for session.html (popup sections added in Task 9)
+// dom.test.js ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â jsdom tests for session.html (popup sections added in Task 9)
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -86,4 +86,31 @@ module.exports = async function main() {
   assert.strictEqual(deleteMessages.length, 1);
   assert.strictEqual(deleteMessages[0].action, 'SESSION_DELETE');
   assert.strictEqual(deleteMessages[0].sessionId, '2026-08-09T10:00:00.000Z');
+  // popup: success and error status lines, buttons re-enabled
+  const popupStub = makeBrowserChromeStub();
+  const sendLog = [];
+  popupStub.runtime.sendMessage = async (msg) => { sendLog.push(msg); return { status: 'done', count: 3 }; };
+  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], popupStub);
+  const status = dom.window.document.getElementById('status');
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(status.textContent, '3 duplicates closed.');
+  assert.strictEqual(dom.window.document.querySelectorAll('button:disabled').length, 0);
+
+  popupStub.runtime.sendMessage = async () => ({ status: 'error', error: 'Quota exceeded' });
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(status.textContent, 'Quota exceeded');
+  assert.ok(status.classList.contains('error'));
+
+  // popup: sleep-hours clamp uses logic.js clampSleepHours
+  const setLog = [];
+  popupStub.storage.sync.set = async (items) => { setLog.push(items); };
+  const sleepInput = dom.window.document.getElementById('sleep-hours');
+  sleepInput.value = '500';
+  sleepInput.dispatchEvent(new dom.window.Event('change'));
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(setLog.length, 1);
+  assert.strictEqual(setLog[0].sleepHours, 168);
+  assert.strictEqual(sleepInput.value, '168');
 };
