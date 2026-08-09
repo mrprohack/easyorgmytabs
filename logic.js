@@ -1,4 +1,4 @@
-﻿// Shared pure helpers. No chrome.* or DOM references — safe for the service
+// Shared pure helpers. No chrome.* or DOM references â€” safe for the service
 // worker (importScripts), popup/dashboard (<script>), and Node tests (require).
 
 const BLOCKED_SCHEMES = [
@@ -94,10 +94,28 @@ function newSessionId() {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function runBatched(items, limit, op, onError = () => {}) {
+  if (limit < 1) throw new RangeError('limit must be >= 1');
+  let next = 0;
+  let succeeded = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        await op(items[index], index);
+        succeeded++;
+      } catch (err) {
+        onError(err, items[index], index);
+      }
+    }
+  }
+  return Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+    .then(() => succeeded);
+}
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BLOCKED_SCHEMES, isRestorable, getDomain, getDateBucket, BUCKET_COLORS,
     TRACKING_PARAMS, dedupeKey, isLinkable, clampSleepHours, DEFAULT_SLEEP_HOURS,
-    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId
+    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, runBatched
   };
 }

@@ -1,4 +1,4 @@
-﻿// logic.test.js
+// logic.test.js
 const assert = require('assert');
 const L = require('../logic.js');
 
@@ -81,4 +81,29 @@ module.exports = async function main() {
   assert.strictEqual(L.DEFAULT_SLEEP_HOURS, 1);
   assert.ok(L.MAX_SAVED_SESSIONS >= 1);
   assert.ok(L.MAX_TABS_PER_SESSION >= 1);
+  // runBatched: concurrency capped at limit
+  let active = 0, maxActive = 0, started = [];
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  const result = await L.runBatched([1, 2, 3, 4, 5], 2, async (item) => {
+    active++;
+    maxActive = Math.max(maxActive, active);
+    started.push(item);
+    await delay(5);
+    active--;
+  });
+  assert.strictEqual(result, 5);
+  assert.strictEqual(maxActive, 2, 'never more than 2 ops in flight');
+  assert.deepStrictEqual(started, [1, 2, 3, 4, 5]);
+
+  // runBatched: failures are counted out and do not abort the batch
+  const failed = [];
+  const okCount = await L.runBatched(['a', 'b', 'c'], 3,
+    async (item) => { if (item === 'b') throw new Error('boom'); },
+    (err, item) => failed.push(item));
+  assert.strictEqual(okCount, 2);
+  assert.deepStrictEqual(failed, ['b']);
+
+  // runBatched: empty input resolves 0; bad limit throws
+  assert.strictEqual(await L.runBatched([], 5, async () => {}), 0);
+  assert.throws(() => L.runBatched([1], 0, async () => {}), RangeError);
 };
