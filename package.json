@@ -1,0 +1,8 @@
+﻿{
+  "name": "easyorgmytabs",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Tab Organizer Pro — Chrome extension",
+  "scripts": { "test": "node test.js" },
+  "devDependencies": { "jsdom": "^26.0.0" }
+}
