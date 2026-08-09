@@ -12,7 +12,7 @@ async function loadPage(htmlFile, scriptFiles, stub) {
   const dom = new JSDOM(html, {
     url: 'chrome-extension://test/',
     runScripts: 'outside-only',
-    beforeParse(window) { window.chrome = stub; }
+    beforeParse(window) { if (stub) window.chrome = stub; }
   });
   for (const file of scriptFiles) {
     dom.window.eval(fs.readFileSync(path.join(ROOT, file), 'utf8'));
@@ -102,6 +102,19 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 10));
   assert.strictEqual(dashboardStatus.textContent, 'Quota exceeded');
   assert.ok(dashboardStatus.classList.contains('error'));
+
+  // popup: without extension APIs the popup shows a clear message instead of throwing
+  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], null);
+  const noApiStatus = dom.window.document.getElementById('status');
+  assert.strictEqual(noApiStatus.textContent, 'Extension APIs unavailable - open this from the toolbar popup.');
+
+  // dashboard: a storage read failure shows in the status line instead of throwing
+  const failStub = makeBrowserChromeStub();
+  failStub.storage.local.get = async () => { throw new Error('Storage read failed'); };
+  dom = await loadPage('session.html', ['logic.js', 'session.js'], failStub);
+  await new Promise(r => setTimeout(r, 0));
+  const failStatus = dom.window.document.getElementById('status');
+  assert.strictEqual(failStatus.textContent, 'Storage read failed');
   // popup: success and error status lines, buttons re-enabled
   const popupStub = makeBrowserChromeStub();
   const sendLog = [];

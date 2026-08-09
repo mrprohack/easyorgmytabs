@@ -15,51 +15,82 @@ const RESULT_TEXT = {
   SAVE_SESSION: ['tab saved', 'tabs saved', 'No tabs to save.']
 };
 
-const statusEl = document.getElementById('status');
-const buttons = Object.keys(ACTIONS).map(id => document.getElementById(id)).filter(Boolean);
+// All wiring lives in initPopup() so a missing element or API can never blank
+// the whole popup with an uncaught top-level error; failures land in the
+// status line instead.
+function initPopup() {
+  const statusEl = document.getElementById('status');
+  const buttons = Object.keys(ACTIONS).map(id => document.getElementById(id)).filter(Boolean);
+  const sleepHoursInput = document.getElementById('sleep-hours');
 
-function setStatus(text, isError = false) {
-  statusEl.textContent = text;
-  statusEl.classList.toggle('error', isError);
+  if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') {
+    if (statusEl) {
+      statusEl.textContent = 'Extension APIs unavailable - open this from the toolbar popup.';
+    }
+    return;
+  }
+
+  function setStatus(text, isError = false) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('error', isError);
+  }
+
+  async function triggerAction(action) {
+    buttons.forEach(b => b.disabled = true);
+    setStatus('Working…');
+    try {
+      const response = await chrome.runtime.sendMessage({ action });
+      const [one, many, none] = RESULT_TEXT[action];
+      if (response?.status === 'error') {
+        setStatus(response.error || 'Something went wrong.', true);
+      } else if (response === undefined) {
+        setStatus('Background not responding. Reload the extension.', true);
+      } else {
+        const count = response.count ?? 0;
+        setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setStatus(err?.message || 'Something went wrong.', true);
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+
+  for (const [id, action] of Object.entries(ACTIONS)) {
+    document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
+  }
+
+  if (!sleepHoursInput) return;
+
+  // Sleep threshold, shared with background.js via chrome.storage.sync.
+  const { clampSleepHours } = window;
+  chrome.storage.sync.get('sleepHours').then(({ sleepHours = 1 }) => {
+    sleepHoursInput.value = sleepHours;
+  }).catch((err) => {
+    console.error('Failed to read sleepHours:', err);
+    setStatus(err?.message || 'Failed to read the sleep threshold.', true);
+  });
+
+  sleepHoursInput.addEventListener('change', async () => {
+    if (typeof clampSleepHours !== 'function') {
+      setStatus('logic.js failed to load - reload the extension.', true);
+      return;
+    }
+    const hours = clampSleepHours(sleepHoursInput.value);
+    sleepHoursInput.value = hours;
+    await chrome.storage.sync.set({ sleepHours: hours });
+    setStatus(`Sleeping tabs idle over ${hours}h.`);
+  });
 }
 
-async function triggerAction(action) {
-  buttons.forEach(b => b.disabled = true);
-  setStatus('Working…');
-  try {
-    const response = await chrome.runtime.sendMessage({ action });
-    const [one, many, none] = RESULT_TEXT[action];
-    if (response?.status === 'error') {
-      setStatus(response.error || 'Something went wrong.', true);
-    } else if (response === undefined) {
-    setStatus('Background not responding. Reload the extension.', true);
-    } else {
-    const count = response.count ?? 0;
-    setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
-    }
-  } catch (err) {
-    console.error('Failed to send message:', err);
-    setStatus(err?.message || 'Something went wrong.', true);
-  } finally {
-    buttons.forEach(b => b.disabled = false);
+try {
+  initPopup();
+} catch (err) {
+  console.error('popup init failed:', err);
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = err?.message || 'Popup failed to load.';
+    statusEl.classList.add('error');
   }
 }
-
-for (const [id, action] of Object.entries(ACTIONS)) {
-  document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
-}
-
-// Sleep threshold, shared with background.js via chrome.storage.sync.
-const sleepHoursInput = document.getElementById('sleep-hours');
-const { clampSleepHours } = window;
-
-chrome.storage.sync.get('sleepHours').then(({ sleepHours = 1 }) => {
-  sleepHoursInput.value = sleepHours;
-});
-
-sleepHoursInput.addEventListener('change', async () => {
-  const hours = clampSleepHours(sleepHoursInput.value);
-  sleepHoursInput.value = hours;
-  await chrome.storage.sync.set({ sleepHours: hours });
-  setStatus(`Sleeping tabs idle over ${hours}h.`);
-});

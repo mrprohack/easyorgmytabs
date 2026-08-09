@@ -177,11 +177,17 @@ async function mutate(action, payload) {
   try {
     const response = await chrome.runtime.sendMessage({ action, ...payload });
     if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
-    await loadSessions();
+    await loadSessions().catch((err) => {
+  statusEl.textContent = err?.message || 'Failed to load sessions.';
+  statusEl.classList.add('error');
+});
   } catch (err) {
     statusEl.textContent = err?.message || 'Something went wrong.';
     statusEl.classList.add('error');
   }
 }
 
-loadSessions();
+loadSessions().catch((err) => {
+  statusEl.textContent = err?.message || 'Failed to load sessions.';
+  statusEl.classList.add('error');
+});
