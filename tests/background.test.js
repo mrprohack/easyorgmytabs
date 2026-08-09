@@ -1,4 +1,4 @@
-﻿// background.test.js — handler behavior tests via the chrome stub.
+// background.test.js â€” handler behavior tests via the chrome stub.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -7,8 +7,14 @@ const { makeChromeStub } = require('./helpers/chrome-stub.js');
 const noop = { addListener() {} };
 globalThis.chrome = { runtime: { onMessage: noop }, commands: { onCommand: noop } };
 
-// background.js is a plain service-worker script, so load it by evaluating it here.
-eval(fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8'));
+// background.js is a plain service-worker script, so load it by evaluating it
+// here. The real service worker gets its helpers via importScripts('logic.js');
+// in tests we strip that line and expose the same helpers as globals.
+const logic = require('../logic.js');
+Object.assign(globalThis, logic);
+const source = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8')
+  .replace(/^\uFEFF?importScripts\([^)]*\);\s*/, '');
+eval(source);
 
 const HOUR = 60 * 60 * 1000;
 const hoursAgo = h => Date.now() - h * HOUR;
@@ -136,3 +142,4 @@ module.exports = async function main() {
   assert.deepStrictEqual(state.groups.map(g => g.title), ['Today', 'Older']);
   assert.deepStrictEqual(state.groups[0].tabIds, [2]);
 };
+

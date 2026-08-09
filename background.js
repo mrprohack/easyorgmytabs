@@ -1,3 +1,4 @@
+importScripts('logic.js');
 const HANDLERS = {
   ARRANGE_BY_DATE: arrangeByDate,
   ARRANGE_BY_WEBSITE: arrangeByWebsite,
@@ -21,20 +22,6 @@ chrome.commands.onCommand.addListener((command) => {
   HANDLERS[command]?.().catch((err) => console.error(`${command} failed:`, err));
 });
 
-// Tabs on these schemes cannot be reopened from a saved URL and are noise in tab groups.
-const BLOCKED_SCHEMES = [
-  'chrome:', 'chrome-extension:', 'chrome-search:', 'chrome-untrusted:',
-  'edge:', 'about:', 'devtools:', 'view-source:'
-];
-
-function isRestorable(url) {
-  try {
-    return !BLOCKED_SCHEMES.includes(new URL(url).protocol);
-  } catch (e) {
-    return false;
-  }
-}
-
 async function ungroupAllTabs() {
   const tabs = await chrome.tabs.query({});
   const tabIds = tabs.filter(t => t.id !== undefined && !t.pinned).map(t => t.id);
@@ -46,15 +33,6 @@ async function ungroupAllTabs() {
     }
   }
   return tabs;
-}
-
-function getDomain(url) {
-  try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '');
-    return hostname || 'New Tab';
-  } catch (e) {
-    return 'Other';
-  }
 }
 
 // Groups tabIds under `title`, per window. Returns the number of groups created.
@@ -101,32 +79,6 @@ async function arrangeByWebsite() {
   return created;
 }
 
-function getDateBucket(lastAccessed) {
-  if (!lastAccessed) return 'Unknown';
-
-  const now = new Date();
-  const accessedDate = new Date(lastAccessed);
-  if (isNaN(accessedDate.getTime())) return 'Unknown';
-
-  const diffTime = Math.abs(now - accessedDate);
-  const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-  if (diffDays < 1) return 'Today';
-  if (diffDays < 7) return 'This Week';
-  if (diffDays < 14) return 'Last Week';
-  if (diffDays < 30) return 'This Month';
-  return 'Older';
-}
-
-const BUCKET_COLORS = {
-  'Today': 'green',
-  'This Week': 'blue',
-  'Last Week': 'purple',
-  'This Month': 'yellow',
-  'Older': 'grey',
-  'Unknown': 'grey'
-};
-
 async function arrangeByDate() {
   const tabs = await ungroupAllTabs();
 
@@ -150,22 +102,6 @@ async function arrangeByDate() {
     created += await createGroups(entries);
   }
   return created;
-}
-
-// Fragments and campaign params point at the same page, so they count as duplicates.
-const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|msclkid$|mc_eid$)/;
-
-function dedupeKey(url) {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = '';
-    for (const name of [...parsed.searchParams.keys()]) {
-      if (TRACKING_PARAMS.test(name)) parsed.searchParams.delete(name);
-    }
-    return parsed.href;
-  } catch (e) {
-    return url;
-  }
 }
 
 async function closeDuplicates() {
@@ -234,3 +170,4 @@ async function saveSession() {
 
   return tabsToSave.length;
 }
+
