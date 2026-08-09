@@ -2,7 +2,7 @@
 
 ## Key Commands & Verification
 
-- **Tests:** `node test.js` — the only automated check (no build step, no package.json, no linter).
+- **Tests:** `node test.js` (or `npm test`) runs every suite in `tests/` (logic, background, dom via jsdom, load); `npm install` brings the only dev dependency (jsdom). No build step; no linter).
 - **How test.js works:** it `eval`s `background.js` in Node with a mocked `chrome` global (`storage`, `tabs`, `tabGroups`, `runtime`, `commands`). Two consequences:
   - `background.js` must stay plain-script compatible: **no ES modules, no top-level await**.
   - Any new top-level `chrome.*` API call in `background.js` must also be stubbed in `test.js` or the suite crashes.
@@ -53,4 +53,4 @@
 
 ## Repo History Notes
 - A full `v2.0.0` rewrite (src/ layout, options page, node:test suite) was committed then **reverted** — HEAD is the flat V1 codebase; don't reintroduce the `src/` structure.
-- `README.md` documents V1 features only — treat AGENTS.md as the authoritative design doc.
+- `README.md` documents the current feature set; treat AGENTS.md as the authoritative design doc.

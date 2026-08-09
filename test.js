@@ -1,4 +1,4 @@
-﻿// test.js — runs every suite in tests/. Usage: node test.js [filter]
+// test.js - runs every suite in tests/. Usage: node test.js [filter]
 const fs = require('fs');
 
 async function main() {

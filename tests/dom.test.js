@@ -1,4 +1,4 @@
-// dom.test.js ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â jsdom tests for session.html (popup sections added in Task 9)
+// dom.test.js - jsdom tests for popup/session surfaces.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -33,6 +33,9 @@ module.exports = async function main() {
     }]
   });
   let dom = await loadPage('session.html', ['logic.js', 'session.js'], stub);
+  // placeholders must be proper UTF-8, never mojibake
+  assert.strictEqual(dom.window.document.getElementById('search').placeholder, 'Search saved tabs…');
+  assert.strictEqual(dom.window.document.querySelector('.add-link-form input').placeholder, 'Paste URL…');
   let links = [...dom.window.document.querySelectorAll('.link')];
   assert.strictEqual(links.length, 2);
   assert.strictEqual(links[0].textContent, 'Safe');
@@ -99,4 +102,51 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 10));
   assert.strictEqual(dashboardStatus.textContent, 'Quota exceeded');
   assert.ok(dashboardStatus.classList.contains('error'));
+  // popup: success and error status lines, buttons re-enabled
+  const popupStub = makeBrowserChromeStub();
+  const sendLog = [];
+  popupStub.runtime.sendMessage = async (msg) => { sendLog.push(msg); return { status: 'done', count: 3 }; };
+  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], popupStub);
+  const status = dom.window.document.getElementById('status');
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(status.textContent, '3 duplicates closed.');
+  assert.strictEqual(dom.window.document.querySelectorAll('button:disabled').length, 0);
+
+  popupStub.runtime.sendMessage = async () => ({ status: 'error', error: 'Quota exceeded' });
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(status.textContent, 'Quota exceeded');
+  assert.ok(status.classList.contains('error'));
+
+  // popup: sleep-hours clamp uses logic.js clampSleepHours
+  const setLog = [];
+  popupStub.storage.sync.set = async (items) => { setLog.push(items); };
+  const sleepInput = dom.window.document.getElementById('sleep-hours');
+  sleepInput.value = '500';
+  sleepInput.dispatchEvent(new dom.window.Event('change'));
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(setLog.length, 1);
+  assert.strictEqual(setLog[0].sleepHours, 168);
+  assert.strictEqual(sleepInput.value, '168');
+
+  // popup: status shows the proper "Working…" text while an action runs
+  const slowStub = makeBrowserChromeStub();
+  slowStub.runtime.sendMessage = async () => { await new Promise(r => setTimeout(r, 50)); return { status: 'done', count: 1 }; };
+  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], slowStub);
+  const slowStatus = dom.window.document.getElementById('status');
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(slowStatus.textContent, 'Working…');
+  await new Promise(r => setTimeout(r, 60));
+
+  // popup: a silent background is reported as not responding, not as "nothing found"
+  const deadStub = makeBrowserChromeStub();
+  deadStub.runtime.sendMessage = async () => undefined;
+  dom = await loadPage('popup.html', ['logic.js', 'popup.js'], deadStub);
+  const deadStatus = dom.window.document.getElementById('status');
+  dom.window.document.getElementById('btn-dedupe').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(deadStatus.textContent, 'Background not responding. Reload the extension.');
+  assert.ok(deadStatus.classList.contains('error'));
 };

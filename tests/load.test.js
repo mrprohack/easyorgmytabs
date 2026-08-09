@@ -1,4 +1,4 @@
-// load.test.js â€” large-tab-set acceptance tests: counts, concurrency caps.
+// load.test.js - large-tab-set acceptance tests: counts, concurrency caps.
 const assert = require('assert');
 const { makeChromeStub } = require('./helpers/chrome-stub.js');
 const loadBackground = require('./helpers/load-background.js');

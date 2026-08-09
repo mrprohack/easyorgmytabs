@@ -25,15 +25,17 @@ function setStatus(text, isError = false) {
 
 async function triggerAction(action) {
   buttons.forEach(b => b.disabled = true);
-  setStatus('Workingâ€¦');
+  setStatus('Working…');
   try {
     const response = await chrome.runtime.sendMessage({ action });
     const [one, many, none] = RESULT_TEXT[action];
     if (response?.status === 'error') {
       setStatus(response.error || 'Something went wrong.', true);
+    } else if (response === undefined) {
+    setStatus('Background not responding. Reload the extension.', true);
     } else {
-      const count = response?.count ?? 0;
-      setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
+    const count = response.count ?? 0;
+    setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
     }
   } catch (err) {
     console.error('Failed to send message:', err);

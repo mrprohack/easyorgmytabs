@@ -1,4 +1,5 @@
-// Shared pure helpers. No chrome.* or DOM references â€” safe for the service
+// Shared pure helpers. No chrome.* or DOM references - safe for the service
+// worker (importScripts), popup/dashboard (<script>), and Node tests (require).
 // worker (importScripts), popup/dashboard (<script>), and Node tests (require).
 
 const BLOCKED_SCHEMES = [
