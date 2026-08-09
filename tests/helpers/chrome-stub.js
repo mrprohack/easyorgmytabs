@@ -1,4 +1,4 @@
-﻿// Shared chrome mock for background handler tests.
+// Shared chrome mock for background handler tests.
 // makeChromeStub(tabs, stored, opts) builds a fake chrome.* API and records
 // what handlers do in `state.log`, `state.groups`, and `state.stored`.
 const noop = { addListener() {} };
@@ -80,4 +80,38 @@ function makeChromeStub(tabs, stored = {}, opts = {}) {
   return state;
 }
 
-module.exports = { makeChromeStub };
+
+// Browser-style stub for jsdom tests of popup.html / session.html.
+function makeBrowserChromeStub({ savedSessions = [] } = {}) {
+  const stored = { savedSessions };
+  const listeners = new Set();
+  const local = {
+    async get(key) { return key in stored ? { [key]: stored[key] } : {}; },
+    async set(items) {
+      for (const [k, v] of Object.entries(items)) {
+        const old = stored[k];
+        stored[k] = v;
+        for (const fn of listeners) fn({ [k]: { oldValue: old, newValue: v } }, 'local');
+      }
+    }
+  };
+  return {
+    _stored: stored,
+    _emit: (changes) => { for (const fn of listeners) fn(changes, 'local'); },
+    storage: {
+      local,
+      sync: {
+        async get() { return { sleepHours: 1 }; },
+        async set() {},
+        onChanged: { addListener() {} }
+      },
+      onChanged: { addListener: (fn) => listeners.add(fn) }
+    },
+    runtime: {
+      getURL: p => `chrome-extension://test/${p}`,
+      async sendMessage() { return { status: 'done', count: 1 }; }
+    }
+  };
+}
+
+module.exports = { makeChromeStub, makeBrowserChromeStub };

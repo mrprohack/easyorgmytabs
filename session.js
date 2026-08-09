@@ -1,17 +1,8 @@
 const container = document.getElementById('sessions-container');
 const searchInput = document.getElementById('search');
+const { filterSessions, isLinkable } = window;
 
 let sessions = [];
-
-// Saved titles and URLs come from arbitrary pages, so they are only ever set as
-// text or as a validated href — never interpolated into markup.
-function isLinkable(url) {
-  try {
-    return ['http:', 'https:'].includes(new URL(url).protocol);
-  } catch (e) {
-    return false;
-  }
-}
 
 function faviconUrl(pageUrl) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
@@ -41,10 +32,8 @@ const ICONS = {
   plus: 'M12 4v16m8-8H4'
 };
 
-async function persist() {
-  await chrome.storage.local.set({ savedSessions: sessions });
-  render();
-}
+// Saved titles and URLs come from arbitrary pages, so they are only ever set
+// as text or as a validated href — never interpolated into markup.
 
 // Chrome serves a generic globe for pages it has no favicon for, but the request
 // still fails for unindexed or non-http URLs — fall back to an initial so the row
@@ -75,9 +64,7 @@ function linkRow(session, tab) {
   const remove = el('button', { className: 'delete-link-btn', title: 'Remove tab' }, icon(ICONS.close));
   remove.addEventListener('click', async () => {
     const index = session.tabs.indexOf(tab);
-    if (index > -1) session.tabs.splice(index, 1);
-    if (session.tabs.length === 0) sessions.splice(sessions.indexOf(session), 1);
-    await persist();
+    if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: session.id ?? session.date, index });
   });
 
   return el('div', { className: 'link-row' }, favicon, link, remove);
@@ -100,8 +87,8 @@ function addLinkForm(session) {
       input.setCustomValidity(''); // the bubble stays up; don't leave the field stuck invalid
       return;
     }
-    session.tabs.push({ title: new URL(url).hostname, url });
-    await persist();
+    const tab = { title: new URL(url).hostname, url };
+    await mutate('SESSION_ADD_TAB', { sessionId: session.id ?? session.date, tab });
   });
 
   return form;
@@ -130,8 +117,7 @@ function sessionCard(session, visibleTabs) {
       }, 3000);
       return;
     }
-    sessions.splice(sessions.indexOf(session), 1);
-    await persist();
+    await mutate('SESSION_DELETE', { sessionId: session.id ?? session.date });
   });
 
   const count = session.tabs.length;
@@ -149,22 +135,13 @@ function sessionCard(session, visibleTabs) {
 }
 
 function render() {
-  const query = searchInput.value.trim().toLowerCase();
+  const visible = filterSessions(sessions, searchInput.value);
   container.textContent = '';
-
-  const visible = sessions
-    .map(session => ({
-      session,
-      tabs: query
-        ? session.tabs.filter(t => `${t.title} ${t.url}`.toLowerCase().includes(query))
-        : session.tabs
-    }))
-    .filter(entry => !query || entry.tabs.length > 0);
 
   if (visible.length === 0) {
     container.append(el('div', {
       className: 'empty-state',
-      textContent: query ? 'No saved tabs match that search.' : 'No saved sessions yet.'
+      textContent: searchInput.value.trim() ? 'No saved tabs match that search.' : 'No saved sessions yet.'
     }));
     return;
   }
@@ -174,9 +151,29 @@ function render() {
   }
 }
 
-searchInput.addEventListener('input', render);
-
-chrome.storage.local.get('savedSessions').then(({ savedSessions = [] }) => {
-  sessions = savedSessions;
-  render();
+let searchTimer;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 150);
 });
+
+async function loadSessions() {
+  const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
+  sessions = Array.isArray(savedSessions) ? savedSessions : [];
+  render();
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.savedSessions) {
+    sessions = changes.savedSessions.newValue || [];
+    render();
+  }
+});
+
+async function mutate(action, payload) {
+  const response = await chrome.runtime.sendMessage({ action, ...payload });
+  if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
+  await loadSessions();
+}
+
+loadSessions();
