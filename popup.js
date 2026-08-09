@@ -61,6 +61,12 @@ function initPopup() {
     document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
   }
 
+  // View Saved Sessions opens the dashboard in a new tab (no background round-trip).
+  document.getElementById('btn-view-sessions')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
+    window.close();
+  });
+
   if (!sleepHoursInput) return;
 
   // Sleep threshold, shared with background.js via chrome.storage.sync.

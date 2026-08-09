@@ -139,6 +139,18 @@ module.exports = async function main() {
   rejection.reason = new dom.window.Error('Rejecto');
   dom.window.dispatchEvent(rejection);
   assert.strictEqual(erStatus.textContent, 'Rejecto');
+
+  // popup: View Saved Sessions opens the dashboard and closes the popup
+  const viewStub = makeBrowserChromeStub();
+  let closed = false;
+  dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], viewStub);
+  dom.window.close = () => { closed = true; };
+  const viewBtn = dom.window.document.getElementById('btn-view-sessions');
+  assert.ok(viewBtn, 'view sessions button exists');
+  viewBtn.click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(viewStub._stored._created, ['chrome-extension://test/session.html']);
+  assert.strictEqual(closed, true);
   // popup: success and error status lines, buttons re-enabled
   const popupStub = makeBrowserChromeStub();
   const sendLog = [];

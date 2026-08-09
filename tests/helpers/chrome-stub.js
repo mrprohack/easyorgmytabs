@@ -110,6 +110,9 @@ function makeBrowserChromeStub({ savedSessions = [] } = {}) {
     runtime: {
       getURL: p => `chrome-extension://test/${p}`,
       async sendMessage() { return { status: 'done', count: 1 }; }
+    },
+    tabs: {
+      async create({ url }) { stored._created = stored._created || []; stored._created.push(url); }
     }
   };
 }
