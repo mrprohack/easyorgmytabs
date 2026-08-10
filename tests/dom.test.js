@@ -243,8 +243,8 @@ module.exports = async function main() {
     view: dom.window.document.querySelector('#btn-view-sessions .shortcut')
   };
   assert.strictEqual(chips.date.textContent, 'Alt+Shift+D');
-  assert.strictEqual(chips.website.textContent, 'Alt+Shift+W');
-  assert.strictEqual(chips.dedupe.textContent, 'Alt+Shift+X');
+  assert.strictEqual(chips.website.textContent, 'Alt+Shift+G');
+  assert.strictEqual(chips.dedupe.textContent, 'Alt+Shift+K');
   assert.strictEqual(chips.view.textContent, 'Alt+Shift+S');
   for (const id of ['btn-undo', 'btn-sleep', 'btn-session']) {
     assert.strictEqual(dom.window.document.querySelector(`#${id} .shortcut`), null, id + ' has no suggested shortcut');
