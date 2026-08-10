@@ -18,7 +18,7 @@ A Chrome extension (Manifest V3) that organizes messy browser tabs into clean, c
 - **Undo Close** - restores the most recently closed tab or window (`chrome.sessions`).
 - **Sleep Inactive Tabs** - discards idle tabs in the current window to free memory. Threshold is configurable (0.25-168 hours, default 1). Never sleeps pinned, audible, or active tabs.
 - **Save Session** - saves non-pinned, restorable tabs in the current window and opens the dashboard; your tabs stay open. A session stores at most 200 tabs and the popup reports any tabs skipped by that limit.
-- **Session Dashboard** - search, restore, add links to, or delete saved sessions. Restore can open a fresh window or restore into the current window.
+- **Session Dashboard** - a responsive saved-workspace dashboard with live session/tab totals, sticky search and clear controls, dense title + hostname rows, and explicit restore choices. **Restore in new window** is the primary action, **Restore here** opens linkable tabs in the current window, and Delete keeps a two-step confirmation.
 
 ### Keyboard shortcuts
 | Shortcut | Action |
@@ -44,7 +44,9 @@ A Chrome extension (Manifest V3) that organizes messy browser tabs into clean, c
 - Use **Ungroup all** to dissolve all non-pinned groups in the current window without relying on extension ownership history.
 - The popup shows the saved On/Off state and reports what was grouped, regrouped, preserved, or ungrouped.
 - Set the sleep threshold with **Sleep tabs idle over ... hours**.
-- Saved sessions are managed from `session.html`.
+- Open **Saved Sessions** to see live session/tab totals. Search filters both tab titles and URLs; use **Clear** to return to all sessions.
+- Saved-session cards use two columns on wider screens and one column on narrower screens. Each tab shows its title and hostname, with a compact remove control.
+- Use **Restore in new window** for a separate workspace, **Restore here** for the current window, or the two-step **Delete** action to remove a saved session.
 
 ## Architecture
 
@@ -53,7 +55,8 @@ A Chrome extension (Manifest V3) that organizes messy browser tabs into clean, c
 - **Owned-group registry** - group IDs created by Tab Organizer are still stored temporarily in `chrome.storage.session` so the popup can derive active-mode state. Mutation safety no longer depends on that registry: explicit Regroup all/Ungroup all behavior is authoritative.
 - **logic.js** - pure helpers for URL filtering, dedupe keys, date buckets, session filtering, sleep-hour clamping, and bounded concurrency.
 - **popup.html / popup.js / popup.css** - compact popup UI with the Regroup all switch, Date/Website controls, Ungroup all, active-mode state, tools, sessions, and non-overlapping shortcut chips.
-- **session.html / session.js** - saved-sessions dashboard. Mutations go through background messages; `chrome.storage.onChanged` keeps open dashboards synchronized.
+- **session.html / session.js** - responsive saved-sessions dashboard with semantic session cards, live totals/search context, dense tab rows, accessible action hierarchy, and background-message mutations. `chrome.storage.onChanged` keeps open dashboards synchronized.
+- **styles.css** - shared base styles plus dashboard-scoped responsive presentation. The dashboard is two-column on desktop, one-column on narrow screens, and constrains long tab text to avoid horizontal overflow.
 - **Storage** - sessions use `chrome.storage.local`; `sleepHours` and `regroupAll` use `chrome.storage.sync`; temporary group-mode ownership metadata uses `chrome.storage.session`.
 - **Security** - saved titles/URLs are rendered with `textContent`, and saved hrefs are assigned only for http(s) URLs.
 - **Decision records** - architecture decisions live under `docs/adr/`.
@@ -79,7 +82,7 @@ node test.js logic        # pure helpers
 node test.js background   # service-worker handlers with chrome.* mocked
 node test.js reliability  # Regroup all Off/On, Ungroup all, session regressions
 node test.js popup-result # toggle persistence, action payloads, result feedback
-node test.js dom          # popup + dashboard via jsdom
+node test.js dom          # popup + dashboard semantics/interactions via jsdom
 node test.js load         # 300-tab acceptance scenarios
 ```
 
@@ -89,9 +92,11 @@ Syntax-check production scripts:
 node --check background.js && node --check logic.js && node --check session.js && node --check popup.js
 ```
 
-### Real Chromium acceptance test
+### Real Chromium acceptance tests
 
-CI loads the unpacked extension into Playwright Chromium and verifies:
+CI loads the unpacked extension into Playwright Chromium and runs two real-browser acceptance flows.
+
+The popup/regroup test verifies:
 - Regroup all Off preserves existing manual/extension groups and organizes only ungrouped tabs.
 - Regroup all On rebuilds all non-pinned groups by the selected mode.
 - Ungroup all removes extension-created and unknown/manual groups.
@@ -99,13 +104,23 @@ CI loads the unpacked extension into Playwright Chromium and verifies:
 - shortcut chips do not overlap their action labels using real DOM bounding boxes.
 - popup natural height remains at or below 600px.
 
+The saved-sessions dashboard test verifies:
+- two-column desktop cards become one column at a 360 px viewport.
+- the page has no horizontal overflow, including with very long saved tab titles.
+- live totals, search filtering, and Clear work in the real extension.
+- keyboard order reaches the primary restore action before destructive Delete.
+- focus-visible styling is present for keyboard users.
+- Restore here opens only linkable URLs.
+- Delete requires two clicks before the session is removed.
+
 ```bash
 npm install --no-save --package-lock=false playwright@1.62.0
 npx playwright install --with-deps chromium
 node tests/e2e/regroup.e2e.js
+node tests/e2e/session-dashboard.e2e.js
 ```
 
-GitHub Actions runs the Node/jsdom/load suite, syntax checks, and real Chromium acceptance test on pull requests and pushes to `master`.
+GitHub Actions runs the Node/jsdom/load suite, syntax checks, and both real Chromium acceptance tests on pull requests and pushes to `master`.
 
 ## Built With
 
