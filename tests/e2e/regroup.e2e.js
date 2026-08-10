@@ -193,14 +193,28 @@ async function main() {
     assert.strictEqual(await popup.locator('#btn-website').getAttribute('aria-pressed'), 'true');
     assert.strictEqual(await popup.locator('#organize-mode').textContent(), 'Website active');
 
+    // Create a brand-new manual/unknown group after the extension regroup. This
+    // proves Ungroup all does not depend on the ownership registry.
+    const lateManualPage = await context.newPage();
+    await lateManualPage.goto(`http://localhost:${port}/late-manual`);
+    const lateManualGroupId = await popup.evaluate(async () => {
+      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const manual = tabs.find(tab => tab.url?.includes('/late-manual'));
+      if (!manual?.id) throw new Error('late manual test tab not found');
+      const groupId = await chrome.tabs.group({ tabIds: [manual.id] });
+      await chrome.tabGroups.update(groupId, { title: 'Late manual group', color: 'red' });
+      return groupId;
+    });
+    assert.ok(lateManualGroupId >= 0, 'late manual group is created outside the extension registry');
+
     // Ungroup all ignores ownership and removes every non-pinned group in the
     // current window. Pinned tabs stay untouched.
     await popup.locator('#btn-ungroup').click();
     await waitForAction(popup);
-    assert.match(await popup.locator('#status').textContent(), /Ungrouped 4 grouped tabs\./);
+    assert.match(await popup.locator('#status').textContent(), /Ungrouped 5 grouped tabs\./);
 
     tabs = await tabSnapshot(popup);
-    for (const marker of ['/manual', '/alpha', '/beta', '/fresh']) {
+    for (const marker of ['/manual', '/alpha', '/beta', '/fresh', '/late-manual']) {
       assert.strictEqual(tabs.find(tab => tab.url?.includes(marker)).groupId, -1, `${marker} is ungrouped by Ungroup all`);
     }
     const pinnedAfterUngroup = tabs.find(tab => tab.url?.includes('/pinned'));
@@ -214,7 +228,7 @@ async function main() {
     const finalHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
     assert.ok(finalHeight <= 600, `final popup content is ${finalHeight}px high; keep it at or below 600px`);
 
-    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; shortcuts clear; popup ${finalHeight}px high`);
+    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all (including unknown manual group); shortcuts clear; popup ${finalHeight}px high`);
   } finally {
     if (context) await context.close();
     await new Promise(resolve => server.close(resolve));
