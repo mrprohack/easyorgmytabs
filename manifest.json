@@ -44,7 +44,7 @@
     },
     "CLOSE_DUPLICATES": {
       "suggested_key": {
-        "default": "Alt+Shift+C"
+        "default": "Alt+Shift+K"
       },
       "description": "Close duplicate tabs"
     },
