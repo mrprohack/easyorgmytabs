@@ -245,16 +245,16 @@ async function main() {
     const finalHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
     assert.ok(finalHeight <= 600, `final popup content is ${finalHeight}px high; keep it at or below 600px`);
 
-    // The recovery button uses the same tabs.create route. Verify Chromium allows
-    // this internal page so users with a collision can repair the binding.
-    const shortcutSettingsTab = await popup.evaluate(async () => {
-      const tab = await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-      return { id: tab.id, url: tab.url };
-    });
-    assert.strictEqual(shortcutSettingsTab.url, 'chrome://extensions/shortcuts');
-    if (shortcutSettingsTab.id !== undefined) {
-      await popup.evaluate(tabId => chrome.tabs.remove(tabId), shortcutSettingsTab.id);
-    }
+    // Chrome's shortcut manager is a privileged chrome:// page. The extension
+    // should keep the popup open and show the exact address rather than opening
+    // a blank tab when direct navigation is rejected by Chromium.
+    const pageCountBeforeHelp = context.pages().length;
+    await popup.locator('#btn-shortcuts-settings').click();
+    assert.strictEqual(context.pages().length, pageCountBeforeHelp, 'shortcut help does not open a blank tab');
+    assert.strictEqual(
+      await popup.locator('#status').textContent(),
+      'Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.'
+    );
 
     console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; active shortcuts verified; popup ${finalHeight}px high`);
   } finally {
