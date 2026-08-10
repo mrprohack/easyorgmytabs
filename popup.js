@@ -17,6 +17,29 @@ const RESULT_TEXT = {
   SAVE_SESSION: ['tab saved', 'tabs saved', 'No tabs to save.']
 };
 
+function formatActionResponse(action, response) {
+  const [one, many, none] = RESULT_TEXT[action];
+  const result = response?.result;
+  const count = result?.changed ?? response?.count ?? 0;
+  const base = count === 0 ? none : `${count} ${count === 1 ? one : many}.`;
+
+  if (result?.code === 'SESSION_CAP' && action === 'SAVE_SESSION' && result.skipped > 0) {
+    const skippedUnit = result.skipped === 1 ? 'tab' : 'tabs';
+    return `${base} ${result.skipped} ${skippedUnit} skipped (session limit).`;
+  }
+
+  if (
+    result?.code === 'PRESERVED_EXISTING_GROUPS' &&
+    result.skipped > 0 &&
+    (action === 'ARRANGE_BY_DATE' || action === 'ARRANGE_BY_WEBSITE')
+  ) {
+    const skippedUnit = result.skipped === 1 ? 'tab' : 'tabs';
+    return `${base} ${result.skipped} ${skippedUnit} already grouped and preserved.`;
+  }
+
+  return base;
+}
+
 // All wiring lives in initPopup() so a missing element or API can never blank
 // the whole popup with an uncaught top-level error; failures land in the
 // status line instead.
@@ -42,14 +65,12 @@ function initPopup() {
     setStatus('Working…');
     try {
       const response = await chrome.runtime.sendMessage({ action });
-      const [one, many, none] = RESULT_TEXT[action];
       if (response?.status === 'error') {
         setStatus(response.error || 'Something went wrong.', true);
       } else if (response === undefined) {
         setStatus('Background not responding. Reload the extension.', true);
       } else {
-        const count = response.count ?? 0;
-        setStatus(count === 0 ? none : `${count} ${count === 1 ? one : many}.`);
+        setStatus(formatActionResponse(action, response));
       }
     } catch (err) {
       console.error('Failed to send message:', err);

@@ -1,5 +1,19 @@
 importScripts('logic.js');
 
+function makeActionResult({ changed = 0, skipped = 0, code, status } = {}) {
+  const result = {
+    status: status || (changed > 0 ? 'ok' : 'noop'),
+    changed,
+    skipped
+  };
+  if (code) result.code = code;
+  return result;
+}
+
+function hasExistingGroup(tab) {
+  return Number.isInteger(tab?.groupId) && tab.groupId >= 0;
+}
+
 async function viewSessions() {
   await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
   return 1;
@@ -26,6 +40,7 @@ async function previewCounts() {
     idle: inactive.filter(t => !t.audible && !t.pinned && t.lastAccessed && t.lastAccessed <= cutoff).length
   };
 }
+
 function findSession(saved, sessionId) {
   return saved.find(s => sessionIdOf(s) === sessionId);
 }
@@ -42,18 +57,32 @@ async function sessionDelete(request = {}) {
   });
 }
 
-async function sessionAddTab(request = {}) {
+async function sessionAddTabResult(request = {}) {
   const { sessionId, tab } = request;
-  if (!sessionId || !tab || !isLinkable(tab.url)) return 0;
+  if (!sessionId || !tab || !isLinkable(tab.url)) return makeActionResult();
+
   return enqueueSessionWrite(async () => {
     const saved = await readSavedSessions();
     const session = findSession(saved, sessionId);
-    if (!session) return 0;
+    if (!session) return makeActionResult();
+
+    if (session.tabs.length >= MAX_TABS_PER_SESSION) {
+      return makeActionResult({
+        status: 'noop',
+        changed: 0,
+        skipped: 1,
+        code: 'SESSION_CAP'
+      });
+    }
+
     session.tabs.push({ title: tab.title || tab.url, url: tab.url });
-    session.tabs = session.tabs.slice(0, MAX_TABS_PER_SESSION);
     await writeSavedSessions(applySessionCap(saved));
-    return 1;
+    return makeActionResult({ changed: 1 });
   });
+}
+
+async function sessionAddTab(request = {}) {
+  return (await sessionAddTabResult(request)).changed;
 }
 
 async function sessionRemoveTab(request = {}) {
@@ -67,46 +96,6 @@ async function sessionRemoveTab(request = {}) {
     await writeSavedSessions(applySessionCap(saved));
     return 1;
   });
-}
-const HANDLERS = {
-  ARRANGE_BY_DATE: arrangeByDate,
-  ARRANGE_BY_WEBSITE: arrangeByWebsite,
-  CLOSE_DUPLICATES: closeDuplicates,
-  SLEEP_INACTIVE: sleepInactive,
-  SAVE_SESSION: saveSession,
-  SESSION_DELETE: sessionDelete,
-  SESSION_ADD_TAB: sessionAddTab,
-  SESSION_REMOVE_TAB: sessionRemoveTab,
-  VIEW_SESSIONS: viewSessions,
-  UNDO_CLOSE: undoClose,
-  PREVIEW: previewCounts
-};
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  const handler = HANDLERS[request?.action];
-  if (!handler) return;
-  handler(request)
-    .then((count) => sendResponse({ status: 'done', count }))
-    .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
-  return true;
-});
-
-// Command names match the message actions above.
-chrome.commands.onCommand.addListener((command) => {
-  HANDLERS[command]?.().catch((err) => console.error(`${command} failed:`, err));
-});
-
-async function ungroupAllTabs() {
-  const tabs = await chrome.tabs.query({});
-  const tabIds = tabs.filter(t => t.id !== undefined && !t.pinned).map(t => t.id);
-  if (tabIds.length > 0) {
-    try {
-      await chrome.tabs.ungroup(tabIds);
-    } catch (e) {
-      // Ignore errors if tabs were already ungrouped
-    }
-  }
-  return tabs;
 }
 
 // Groups tabIds under `title`, per window. Returns the number of groups created.
@@ -122,12 +111,15 @@ async function createGroups(entries) {
     (err, entry) => console.error(`Failed to group tabs for "${entry.title}":`, err)
   );
 }
-async function arrangeByWebsite() {
-  const tabs = await ungroupAllTabs();
+
+async function arrangeByWebsiteResult({ currentWindow = false } = {}) {
+  const tabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
+  const existingGroupCount = tabs.filter(hasExistingGroup).length;
 
   const windowGroups = {};
   for (const tab of tabs) {
-    if (tab.pinned) continue; // Pinned tabs cannot be grouped in Chrome
+    if (tab.pinned) continue;
+    if (hasExistingGroup(tab)) continue;
     if (!isRestorable(tab.url)) continue;
     if (!windowGroups[tab.windowId]) windowGroups[tab.windowId] = {};
     const domain = getDomain(tab.url);
@@ -147,15 +139,26 @@ async function arrangeByWebsite() {
     }));
     created += await createGroups(entries);
   }
-  return created;
+
+  return makeActionResult({
+    changed: created,
+    skipped: existingGroupCount,
+    code: existingGroupCount > 0 ? 'PRESERVED_EXISTING_GROUPS' : undefined
+  });
 }
 
-async function arrangeByDate() {
-  const tabs = await ungroupAllTabs();
+async function arrangeByWebsite(options = {}) {
+  return (await arrangeByWebsiteResult(options)).changed;
+}
+
+async function arrangeByDateResult({ currentWindow = false } = {}) {
+  const tabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
+  const existingGroupCount = tabs.filter(hasExistingGroup).length;
 
   const groups = {};
   for (const tab of tabs) {
     if (tab.pinned) continue;
+    if (hasExistingGroup(tab)) continue;
     if (!isRestorable(tab.url)) continue;
     const bucket = getDateBucket(tab.lastAccessed);
 
@@ -172,7 +175,16 @@ async function arrangeByDate() {
       .map(bucket => ({ tabIds: buckets[bucket], title: bucket, color: BUCKET_COLORS[bucket] }));
     created += await createGroups(entries);
   }
-  return created;
+
+  return makeActionResult({
+    changed: created,
+    skipped: existingGroupCount,
+    code: existingGroupCount > 0 ? 'PRESERVED_EXISTING_GROUPS' : undefined
+  });
+}
+
+async function arrangeByDate(options = {}) {
+  return (await arrangeByDateResult(options)).changed;
 }
 
 async function closeDuplicates() {
@@ -198,6 +210,7 @@ async function sleepInactive() {
     (err, id) => console.error(`Failed to discard tab ${id}:`, err)
   );
 }
+
 let sessionWriteChain = Promise.resolve();
 
 function enqueueSessionWrite(task) {
@@ -223,15 +236,21 @@ async function writeSavedSessions(sessions) {
     await chrome.storage.local.set({ savedSessions: applySessionCap(sessions).slice(0, Math.ceil(MAX_SAVED_SESSIONS / 2)) });
   }
 }
-async function saveSession() {
+
+async function saveSessionResult() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const tabsToSave = tabs.filter(t => !t.pinned && isRestorable(t.url));
-  if (tabsToSave.length === 0) return 0;
+  if (tabsToSave.length === 0) return makeActionResult();
 
+  const storedTabs = tabsToSave.slice(0, MAX_TABS_PER_SESSION).map(t => ({
+    title: t.title || t.url,
+    url: t.url
+  }));
+  const skipped = tabsToSave.length - storedTabs.length;
   const sessionData = {
     id: newSessionId(),
     date: new Date().toISOString(),
-    tabs: tabsToSave.slice(0, MAX_TABS_PER_SESSION).map(t => ({ title: t.title || t.url, url: t.url }))
+    tabs: storedTabs
   };
 
   await enqueueSessionWrite(async () => {
@@ -244,5 +263,77 @@ async function saveSession() {
   // tabs stay open - saving never closes them.
   await chrome.tabs.create({ url: chrome.runtime.getURL('session.html') });
 
-  return tabsToSave.length;
+  return makeActionResult({
+    status: skipped > 0 ? 'partial' : 'ok',
+    changed: storedTabs.length,
+    skipped,
+    code: skipped > 0 ? 'SESSION_CAP' : undefined
+  });
 }
+
+async function saveSession() {
+  return (await saveSessionResult()).changed;
+}
+
+// HANDLERS keeps the existing numeric core API for tests and internal callers.
+const HANDLERS = {
+  ARRANGE_BY_DATE: arrangeByDate,
+  ARRANGE_BY_WEBSITE: arrangeByWebsite,
+  CLOSE_DUPLICATES: closeDuplicates,
+  SLEEP_INACTIVE: sleepInactive,
+  SAVE_SESSION: saveSession,
+  SESSION_DELETE: sessionDelete,
+  SESSION_ADD_TAB: sessionAddTab,
+  SESSION_REMOVE_TAB: sessionRemoveTab,
+  VIEW_SESSIONS: viewSessions,
+  UNDO_CLOSE: undoClose,
+  PREVIEW: previewCounts
+};
+
+// UI/keyboard entry points use safe defaults and structured results.
+async function executeAction(request = {}) {
+  const action = request?.action;
+
+  if (action === 'PREVIEW') {
+    return { status: 'done', count: await previewCounts() };
+  }
+
+  let result;
+  switch (action) {
+    case 'ARRANGE_BY_WEBSITE':
+      result = await arrangeByWebsiteResult({ currentWindow: request?.allWindows !== true });
+      break;
+    case 'ARRANGE_BY_DATE':
+      result = await arrangeByDateResult({ currentWindow: request?.allWindows !== true });
+      break;
+    case 'SAVE_SESSION':
+      result = await saveSessionResult();
+      break;
+    case 'SESSION_ADD_TAB':
+      result = await sessionAddTabResult(request);
+      break;
+    default: {
+      const handler = HANDLERS[action];
+      if (!handler) return null;
+      const changed = await handler(request);
+      result = makeActionResult({ changed: typeof changed === 'number' ? changed : 0 });
+    }
+  }
+
+  return { status: 'done', count: result.changed, result };
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (!HANDLERS[request?.action]) return;
+  executeAction(request)
+    .then((response) => sendResponse(response))
+    .catch((err) => sendResponse({ status: 'error', error: err?.message || String(err) }));
+  return true;
+});
+
+// Keyboard commands use the same safe defaults as popup actions.
+chrome.commands.onCommand.addListener((command) => {
+  if (!HANDLERS[command]) return;
+  executeAction({ action: command })
+    .catch((err) => console.error(`${command} failed:`, err));
+});
