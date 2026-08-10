@@ -46,14 +46,78 @@ module.exports = async function main() {
   assert.strictEqual(response.count, 1);
   assert.strictEqual(state.groups.length, 1);
   assert.deepStrictEqual(state.groups[0].tabIds, [2]);
+  assert.strictEqual(state.tabs[0].groupId, 42, 'manual group remains untouched');
 
-  // Structured result is returned alongside legacy count compatibility.
+  // Structured result explains manual groups that were preserved.
   assert.deepStrictEqual(response.result, {
     status: 'ok',
     changed: 1,
     skipped: 1,
-    code: 'PRESERVED_EXISTING_GROUPS'
+    code: 'PRESERVED_EXISTING_GROUPS',
+    mode: 'website',
+    regroupedTabs: 0,
+    manualGroupedTabs: 1
   });
+
+  // Switching Date -> Website automatically replaces only extension-owned groups.
+  state = makeChromeStub([
+    { url: 'https://alpha.example/a', groupId: -1, lastAccessed: Date.now() },
+    { url: 'https://beta.example/b', groupId: -1, lastAccessed: Date.now() }
+  ]);
+  response = await sendMessage({ action: 'ARRANGE_BY_DATE' });
+  assert.strictEqual(response.count, 1, 'same-date tabs start in one date group');
+  assert.strictEqual(Object.keys(state.sessionStored.organizerOwnedGroups || {}).length, 1, 'date group ownership is recorded');
+
+  response = await sendMessage({ action: 'ARRANGE_BY_WEBSITE' });
+  assert.strictEqual(response.count, 2, 'the same tabs can be regrouped by website');
+  assert.deepStrictEqual(response.result, {
+    status: 'ok',
+    changed: 2,
+    skipped: 0,
+    code: 'REGROUPED',
+    mode: 'website',
+    regroupedTabs: 2,
+    manualGroupedTabs: 0
+  });
+  assert.deepStrictEqual(state.log.filter(([op]) => op === 'ungroup'), [['ungroup', [1, 2]]]);
+  assert.deepStrictEqual(state.groups.map(group => group.title).sort(), ['alpha.example', 'beta.example']);
+  assert.strictEqual(Object.keys(state.sessionStored.organizerOwnedGroups || {}).length, 2, 'replacement website groups are owned');
+
+  // Switching modes never touches a manual group in the same window.
+  state = makeChromeStub([
+    { url: 'https://manual.example/a', groupId: 90, lastAccessed: Date.now() },
+    { url: 'https://alpha.example/a', groupId: -1, lastAccessed: Date.now() },
+    { url: 'https://beta.example/b', groupId: -1, lastAccessed: Date.now() }
+  ]);
+  await sendMessage({ action: 'ARRANGE_BY_DATE' });
+  response = await sendMessage({ action: 'ARRANGE_BY_WEBSITE' });
+  assert.strictEqual(state.tabs[0].groupId, 90, 'manual group survives Date -> Website');
+  assert.ok(!state.log.filter(([op]) => op === 'ungroup').flatMap(([, ids]) => ids).includes(1), 'manual tab is never ungrouped');
+  assert.strictEqual(response.result.regroupedTabs, 2);
+  assert.strictEqual(response.result.manualGroupedTabs, 1);
+
+  // Grouping state exposes the active organizer mode for popup highlighting.
+  response = await sendMessage({ action: 'GROUPING_STATE' });
+  assert.deepStrictEqual(response, {
+    status: 'done',
+    count: { mode: 'website', groupCount: 2, tabCount: 2 }
+  });
+
+  // Ungroup removes only extension-owned groups and leaves manual groups alone.
+  response = await sendMessage({ action: 'UNGROUP_ORGANIZED' });
+  assert.strictEqual(response.count, 2);
+  assert.deepStrictEqual(response.result, {
+    status: 'ok',
+    changed: 2,
+    skipped: 1,
+    code: 'UNGROUPED_ORGANIZED',
+    mode: null,
+    manualGroupedTabs: 1
+  });
+  assert.strictEqual(state.tabs[0].groupId, 90);
+  assert.strictEqual(state.tabs[1].groupId, -1);
+  assert.strictEqual(state.tabs[2].groupId, -1);
+  assert.deepStrictEqual(state.sessionStored.organizerOwnedGroups, {});
 
   // Saving more than MAX_TABS_PER_SESSION reports what was actually stored.
   const tooMany = Array.from({ length: 250 }, (_, i) => ({

@@ -1,5 +1,7 @@
 importScripts('logic.js');
 
+const OWNED_GROUPS_KEY = 'organizerOwnedGroups';
+
 function makeActionResult({ changed = 0, skipped = 0, code, status } = {}) {
   const result = {
     status: status || (changed > 0 ? 'ok' : 'noop'),
@@ -12,6 +14,96 @@ function makeActionResult({ changed = 0, skipped = 0, code, status } = {}) {
 
 function hasExistingGroup(tab) {
   return Number.isInteger(tab?.groupId) && tab.groupId >= 0;
+}
+
+async function readOwnedGroups() {
+  if (!chrome.storage?.session) return {};
+  const data = await chrome.storage.session.get(OWNED_GROUPS_KEY);
+  const registry = data?.[OWNED_GROUPS_KEY];
+  return registry && typeof registry === 'object' && !Array.isArray(registry) ? registry : {};
+}
+
+async function writeOwnedGroups(registry) {
+  if (!chrome.storage?.session) return;
+  await chrome.storage.session.set({ [OWNED_GROUPS_KEY]: registry });
+}
+
+function removeOwnedEntriesForScope(registry, tabs, removedGroupIds = new Set()) {
+  const next = { ...registry };
+  const scopeWindows = new Set(tabs.map(tab => tab.windowId));
+  const liveGroupIds = new Set(tabs.filter(hasExistingGroup).map(tab => String(tab.groupId)));
+
+  for (const [groupId, metadata] of Object.entries(next)) {
+    if (removedGroupIds.has(Number(groupId))) {
+      delete next[groupId];
+      continue;
+    }
+    if (scopeWindows.has(metadata?.windowId) && !liveGroupIds.has(groupId)) {
+      delete next[groupId];
+    }
+  }
+  return next;
+}
+
+async function prepareTabsForGrouping(tabs) {
+  const registry = await readOwnedGroups();
+  const ownedGroupIds = new Set();
+  const ownedTabIds = [];
+  let manualGroupedTabs = 0;
+
+  for (const tab of tabs) {
+    if (!hasExistingGroup(tab)) continue;
+    const metadata = registry[String(tab.groupId)];
+    if (metadata && metadata.windowId === tab.windowId) {
+      ownedGroupIds.add(tab.groupId);
+      if (tab.id !== undefined) ownedTabIds.push(tab.id);
+    } else {
+      manualGroupedTabs++;
+    }
+  }
+
+  if (ownedTabIds.length > 0) {
+    await chrome.tabs.ungroup(ownedTabIds);
+  }
+
+  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, ownedGroupIds);
+  if (JSON.stringify(nextRegistry) !== JSON.stringify(registry)) {
+    await writeOwnedGroups(nextRegistry);
+  }
+
+  return {
+    tabs: tabs.map(tab => ownedGroupIds.has(tab.groupId) ? { ...tab, groupId: -1 } : tab),
+    regroupedTabs: ownedTabIds.length,
+    manualGroupedTabs
+  };
+}
+
+async function rememberCreatedGroups(createdGroups, mode) {
+  if (createdGroups.length === 0) return;
+  const registry = await readOwnedGroups();
+  for (const group of createdGroups) {
+    registry[String(group.groupId)] = { windowId: group.windowId, mode };
+  }
+  await writeOwnedGroups(registry);
+}
+
+async function groupingState() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const registry = await readOwnedGroups();
+  const groups = new Map();
+
+  for (const tab of tabs) {
+    if (!hasExistingGroup(tab)) continue;
+    const metadata = registry[String(tab.groupId)];
+    if (!metadata || metadata.windowId !== tab.windowId) continue;
+    if (!groups.has(tab.groupId)) groups.set(tab.groupId, { mode: metadata.mode, tabCount: 0 });
+    groups.get(tab.groupId).tabCount++;
+  }
+
+  const modes = new Set([...groups.values()].map(group => group.mode).filter(Boolean));
+  const mode = modes.size === 1 ? [...modes][0] : modes.size > 1 ? 'mixed' : null;
+  const tabCount = [...groups.values()].reduce((sum, group) => sum + group.tabCount, 0);
+  return { mode, groupCount: groups.size, tabCount };
 }
 
 async function viewSessions() {
@@ -98,23 +190,50 @@ async function sessionRemoveTab(request = {}) {
   });
 }
 
-// Groups tabIds under `title`, per window. Returns the number of groups created.
-async function createGroups(entries) {
+// Groups tabIds under `title`, per window and returns successful group IDs.
+async function createGroupsDetailed(entries) {
+  const createdGroups = [];
   const op = async (entry) => {
     const groupId = await chrome.tabs.group({ tabIds: entry.tabIds });
     await chrome.tabGroups.update(groupId, { title: entry.title, collapsed: true, color: entry.color });
+    createdGroups.push({ groupId, windowId: entry.windowId, tabIds: entry.tabIds });
   };
-  return runBatched(
+  const count = await runBatched(
     entries,
     5,
     op,
     (err, entry) => console.error(`Failed to group tabs for "${entry.title}":`, err)
   );
+  return { count, groups: createdGroups };
+}
+
+// Legacy numeric helper retained for direct tests/internal callers.
+async function createGroups(entries) {
+  return (await createGroupsDetailed(entries)).count;
+}
+
+function buildGroupingResult({ created, mode, regroupedTabs, manualGroupedTabs }) {
+  const code = regroupedTabs > 0
+    ? 'REGROUPED'
+    : manualGroupedTabs > 0
+      ? 'PRESERVED_EXISTING_GROUPS'
+      : undefined;
+  const result = makeActionResult({
+    changed: created,
+    skipped: manualGroupedTabs,
+    code,
+    status: created > 0 ? 'ok' : regroupedTabs > 0 ? 'partial' : undefined
+  });
+  result.mode = mode;
+  result.regroupedTabs = regroupedTabs;
+  result.manualGroupedTabs = manualGroupedTabs;
+  return result;
 }
 
 async function arrangeByWebsiteResult({ currentWindow = false } = {}) {
-  const tabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
-  const existingGroupCount = tabs.filter(hasExistingGroup).length;
+  const queriedTabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
+  const prepared = await prepareTabsForGrouping(queriedTabs);
+  const tabs = prepared.tabs;
 
   const windowGroups = {};
   for (const tab of tabs) {
@@ -128,22 +247,28 @@ async function arrangeByWebsiteResult({ currentWindow = false } = {}) {
   }
 
   const colors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
-
   let created = 0;
-  for (const domainGroups of Object.values(windowGroups)) {
+  const createdGroups = [];
+
+  for (const [windowId, domainGroups] of Object.entries(windowGroups)) {
     let colorIndex = 0;
     const entries = Object.entries(domainGroups).map(([domain, tabIds]) => ({
       tabIds,
       title: domain,
-      color: colors[colorIndex++ % colors.length]
+      color: colors[colorIndex++ % colors.length],
+      windowId: Number(windowId)
     }));
-    created += await createGroups(entries);
+    const detail = await createGroupsDetailed(entries);
+    created += detail.count;
+    createdGroups.push(...detail.groups);
   }
 
-  return makeActionResult({
-    changed: created,
-    skipped: existingGroupCount,
-    code: existingGroupCount > 0 ? 'PRESERVED_EXISTING_GROUPS' : undefined
+  await rememberCreatedGroups(createdGroups, 'website');
+  return buildGroupingResult({
+    created,
+    mode: 'website',
+    regroupedTabs: prepared.regroupedTabs,
+    manualGroupedTabs: prepared.manualGroupedTabs
   });
 }
 
@@ -152,8 +277,9 @@ async function arrangeByWebsite(options = {}) {
 }
 
 async function arrangeByDateResult({ currentWindow = false } = {}) {
-  const tabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
-  const existingGroupCount = tabs.filter(hasExistingGroup).length;
+  const queriedTabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
+  const prepared = await prepareTabsForGrouping(queriedTabs);
+  const tabs = prepared.tabs;
 
   const groups = {};
   for (const tab of tabs) {
@@ -164,27 +290,76 @@ async function arrangeByDateResult({ currentWindow = false } = {}) {
 
     if (!groups[tab.windowId]) groups[tab.windowId] = {};
     if (!groups[tab.windowId][bucket]) groups[tab.windowId][bucket] = [];
-
     groups[tab.windowId][bucket].push(tab.id);
   }
 
   let created = 0;
-  for (const buckets of Object.values(groups)) {
+  const createdGroups = [];
+  for (const [windowId, buckets] of Object.entries(groups)) {
     const entries = Object.keys(BUCKET_COLORS)
       .filter(bucket => buckets[bucket]?.length)
-      .map(bucket => ({ tabIds: buckets[bucket], title: bucket, color: BUCKET_COLORS[bucket] }));
-    created += await createGroups(entries);
+      .map(bucket => ({
+        tabIds: buckets[bucket],
+        title: bucket,
+        color: BUCKET_COLORS[bucket],
+        windowId: Number(windowId)
+      }));
+    const detail = await createGroupsDetailed(entries);
+    created += detail.count;
+    createdGroups.push(...detail.groups);
   }
 
-  return makeActionResult({
-    changed: created,
-    skipped: existingGroupCount,
-    code: existingGroupCount > 0 ? 'PRESERVED_EXISTING_GROUPS' : undefined
+  await rememberCreatedGroups(createdGroups, 'date');
+  return buildGroupingResult({
+    created,
+    mode: 'date',
+    regroupedTabs: prepared.regroupedTabs,
+    manualGroupedTabs: prepared.manualGroupedTabs
   });
 }
 
 async function arrangeByDate(options = {}) {
   return (await arrangeByDateResult(options)).changed;
+}
+
+async function ungroupOrganizedResult() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const registry = await readOwnedGroups();
+  const ownedGroupIds = new Set();
+  const ownedTabIds = [];
+  let manualGroupedTabs = 0;
+
+  for (const tab of tabs) {
+    if (!hasExistingGroup(tab)) continue;
+    const metadata = registry[String(tab.groupId)];
+    if (metadata && metadata.windowId === tab.windowId) {
+      ownedGroupIds.add(tab.groupId);
+      if (tab.id !== undefined) ownedTabIds.push(tab.id);
+    } else {
+      manualGroupedTabs++;
+    }
+  }
+
+  if (ownedTabIds.length > 0) await chrome.tabs.ungroup(ownedTabIds);
+  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, ownedGroupIds);
+  if (JSON.stringify(nextRegistry) !== JSON.stringify(registry)) await writeOwnedGroups(nextRegistry);
+
+  const result = makeActionResult({
+    changed: ownedTabIds.length,
+    skipped: manualGroupedTabs,
+    code: ownedTabIds.length > 0
+      ? 'UNGROUPED_ORGANIZED'
+      : manualGroupedTabs > 0
+        ? 'PRESERVED_EXISTING_GROUPS'
+        : undefined
+  });
+  result.mode = null;
+  result.manualGroupedTabs = manualGroupedTabs;
+  return result;
+}
+
+async function ungroupOrganized() {
+  return (await ungroupOrganizedResult()).changed;
 }
 
 async function closeDuplicates() {
@@ -279,6 +454,8 @@ async function saveSession() {
 const HANDLERS = {
   ARRANGE_BY_DATE: arrangeByDate,
   ARRANGE_BY_WEBSITE: arrangeByWebsite,
+  UNGROUP_ORGANIZED: ungroupOrganized,
+  GROUPING_STATE: groupingState,
   CLOSE_DUPLICATES: closeDuplicates,
   SLEEP_INACTIVE: sleepInactive,
   SAVE_SESSION: saveSession,
@@ -297,6 +474,9 @@ async function executeAction(request = {}) {
   if (action === 'PREVIEW') {
     return { status: 'done', count: await previewCounts() };
   }
+  if (action === 'GROUPING_STATE') {
+    return { status: 'done', count: await groupingState() };
+  }
 
   let result;
   switch (action) {
@@ -305,6 +485,9 @@ async function executeAction(request = {}) {
       break;
     case 'ARRANGE_BY_DATE':
       result = await arrangeByDateResult({ currentWindow: request?.allWindows !== true });
+      break;
+    case 'UNGROUP_ORGANIZED':
+      result = await ungroupOrganizedResult();
       break;
     case 'SAVE_SESSION':
       result = await saveSessionResult();
