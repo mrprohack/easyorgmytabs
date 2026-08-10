@@ -107,7 +107,7 @@ async function main() {
     console.log(`Registered shortcut matrix: ${JSON.stringify(registeredShortcuts)}`);
     assert.strictEqual(registeredShortcuts.ARRANGE_BY_DATE, 'Alt+Shift+D');
     assert.strictEqual(registeredShortcuts.ARRANGE_BY_WEBSITE, 'Alt+Shift+G');
-    assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+C');
+    assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+K');
     assert.strictEqual(registeredShortcuts.VIEW_SESSIONS, 'Alt+Shift+S');
     await popup.waitForFunction(() => document.querySelector('#btn-date .shortcut')?.textContent === 'Alt+Shift+D');
     assert.strictEqual(await popup.locator('#btn-website .shortcut').textContent(), registeredShortcuts.ARRANGE_BY_WEBSITE);
