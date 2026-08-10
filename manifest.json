@@ -38,13 +38,13 @@
     },
     "ARRANGE_BY_WEBSITE": {
       "suggested_key": {
-        "default": "Alt+Shift+W"
+        "default": "Alt+Shift+G"
       },
       "description": "Arrange tabs by website"
     },
     "CLOSE_DUPLICATES": {
       "suggested_key": {
-        "default": "Alt+Shift+X"
+        "default": "Alt+Shift+C"
       },
       "description": "Close duplicate tabs"
     },
