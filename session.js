@@ -131,9 +131,9 @@ function linkRow(session, tab) {
 
 function addLinkForm(session) {
   const input = el('input', {
-    type: 'url', required: true, className: 'input', placeholder: 'Paste URL…',
-    ariaLabel: 'URL to add to this session'
+    type: 'url', required: true, className: 'input', placeholder: 'Paste URL…'
   });
+  input.setAttribute('aria-label', 'URL to add to this session');
 
   const add = el('button', { type: 'submit', className: 'btn add-link-btn', title: 'Add tab' }, icon(ICONS.plus), el('span', { textContent: 'Add' }));
   add.setAttribute('aria-label', 'Add tab to session');
@@ -211,10 +211,10 @@ function sessionCard(session, visibleTabs) {
         el('p', { className: 'session-eyebrow', textContent: 'Saved workspace' }),
         el('h2', { id: headingId, textContent: sessionDate }),
         el('p', { className: 'meta', textContent: `${count} ${plural(count, 'tab', 'tabs')}` })
-      ),
-      el('div', { className: 'session-danger-zone' }, remove)
+      )
     ),
     el('div', { className: 'session-actions' }, restore, restoreHere),
+    el('div', { className: 'session-danger-zone' }, remove),
     el('div', { className: 'session-tabs-heading' },
       el('span', { textContent: 'Tabs' }),
       el('span', { className: 'session-visible-count', textContent: `${visibleTabs.length} shown` })
