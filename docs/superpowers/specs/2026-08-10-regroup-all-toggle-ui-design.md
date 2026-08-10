@@ -41,7 +41,7 @@ Fix shortcut-label overlap, make ungrouping predictable, and let users choose wh
 - When Regroup all is On or Ungroup all is clicked, the behavior is explicit and intentionally may dissolve manual groups in the current window.
 
 ## Verification
-- Unit/reliability tests cover Off preserving all groups, On rebuilding manual + extension groups, and Ungroup all removing all non-pinned groups.
+- Unit/reliability tests cover Off preserving all groups, On rebuilding manual + extension groups, Ungroup all removing all non-pinned groups, and the pinned-group safety guard.
 - Popup/jsdom tests cover toggle persistence, action payloads, copy, and shortcut layout classes.
-- Real Playwright Chromium E2E covers Off -> On -> Ungroup all and verifies pinned grouped tabs remain grouped.
-- Real-browser layout assertion keeps popup content <= 600px and detects shortcut/action-label overlap using element bounding boxes.
+- Real Playwright Chromium E2E covers Off -> On -> Ungroup all, verifies a pinned tab remains excluded, and proves Ungroup all also removes a newly-created unknown/manual group.
+- Real-browser layout assertions keep popup content <= 600px and detect shortcut/action-label overlap using element bounding boxes.
