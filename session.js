@@ -1,8 +1,13 @@
 const container = document.getElementById('sessions-container');
 const statusEl = document.getElementById('status');
 const searchInput = document.getElementById('search');
+const clearSearchBtn = document.getElementById('clear-search');
+const sessionCountEl = document.getElementById('session-count');
+const tabCountEl = document.getElementById('tab-count');
+const resultSummaryEl = document.getElementById('result-summary');
 
 let sessions = [];
+let searchTimer;
 
 function faviconUrl(pageUrl) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
@@ -32,59 +37,117 @@ const ICONS = {
   plus: 'M12 4v16m8-8H4'
 };
 
+function plural(count, one, many) {
+  return count === 1 ? one : many;
+}
+
+function sessionStats(items) {
+  return (Array.isArray(items) ? items : []).reduce((stats, item) => {
+    const tabs = Array.isArray(item?.tabs) ? item.tabs : [];
+    stats.sessionCount += 1;
+    stats.tabCount += tabs.length;
+    return stats;
+  }, { sessionCount: 0, tabCount: 0 });
+}
+
+function hostnameOf(pageUrl) {
+  try {
+    return new URL(pageUrl).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return '';
+  }
+}
+
+function setDashboardStatus(text, isError = false) {
+  if (!statusEl) return;
+  statusEl.textContent = text;
+  statusEl.classList.toggle('error', isError);
+}
+
+function updateDashboardSummary(visibleResults) {
+  const total = sessionStats(sessions);
+  if (sessionCountEl) {
+    sessionCountEl.textContent = `${total.sessionCount} ${plural(total.sessionCount, 'session', 'sessions')}`;
+  }
+  if (tabCountEl) {
+    tabCountEl.textContent = `${total.tabCount} ${plural(total.tabCount, 'tab', 'tabs')}`;
+  }
+
+  const query = searchInput?.value.trim() || '';
+  if (clearSearchBtn) clearSearchBtn.hidden = query.length === 0;
+  if (!resultSummaryEl) return;
+
+  const visible = sessionStats(visibleResults);
+  if (query) {
+    resultSummaryEl.textContent = `${visible.sessionCount} ${plural(visible.sessionCount, 'session', 'sessions')} · ${visible.tabCount} matching ${plural(visible.tabCount, 'tab', 'tabs')}`;
+  } else {
+    resultSummaryEl.textContent = `${visible.sessionCount} saved ${plural(visible.sessionCount, 'session', 'sessions')} · ${visible.tabCount} ${plural(visible.tabCount, 'tab', 'tabs')}`;
+  }
+}
+
+function clearSearch() {
+  if (!searchInput) return;
+  clearTimeout(searchTimer);
+  searchInput.value = '';
+  render();
+  searchInput.focus();
+}
+
 // Saved titles and URLs come from arbitrary pages, so they are only ever set
 // as text or as a validated href — never interpolated into markup.
-
-// Chrome serves a generic globe for pages it has no favicon for, but the request
-// still fails for unindexed or non-http URLs — fall back to an initial so the row
-// keeps its alignment instead of losing the icon entirely.
 function faviconFallback(pageUrl) {
-  let initial = '?';
-  try {
-    initial = (new URL(pageUrl).hostname.replace(/^www\./, '')[0] || '?').toUpperCase();
-  } catch (e) {
-    // keep '?'
-  }
+  const hostname = hostnameOf(pageUrl);
+  const initial = (hostname[0] || '?').toUpperCase();
   return el('span', { className: 'favicon favicon-fallback', textContent: initial });
 }
 
 function linkRow(session, tab) {
+  const displayTitle = tab.title || tab.url || 'Untitled tab';
+  const host = hostnameOf(tab.url);
   const favicon = el('img', { className: 'favicon', src: faviconUrl(tab.url), alt: '', loading: 'lazy' });
   favicon.addEventListener('error', () => favicon.replaceWith(faviconFallback(tab.url)), { once: true });
 
   const link = el('a', {
     className: 'link',
-    textContent: tab.title || tab.url,
+    textContent: displayTitle,
     title: tab.url,
     target: '_blank',
     rel: 'noopener noreferrer'
   });
   if (isLinkable(tab.url)) link.href = tab.url;
 
-  const remove = el('button', { className: 'delete-link-btn', title: 'Remove tab' }, icon(ICONS.close));
+  const copy = el('div', { className: 'link-copy' }, link);
+  if (host) copy.append(el('span', { className: 'link-host', textContent: host }));
+
+  const remove = el('button', { className: 'delete-link-btn', type: 'button', title: `Remove ${displayTitle}` }, icon(ICONS.close));
+  remove.setAttribute('aria-label', `Remove ${displayTitle}`);
   remove.addEventListener('click', async () => {
     const index = session.tabs.indexOf(tab);
     if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: sessionIdOf(session), index });
   });
 
-  return el('div', { className: 'link-row' }, favicon, link, remove);
+  return el('div', { className: 'link-row' }, favicon, copy, remove);
 }
 
 function addLinkForm(session) {
-  const input = el('input', { type: 'url', required: true, className: 'input', placeholder: 'Paste URL…' });
+  const input = el('input', {
+    type: 'url', required: true, className: 'input', placeholder: 'Paste URL…'
+  });
+  input.setAttribute('aria-label', 'URL to add to this session');
 
-  const form = el('form', { className: 'add-link-form' },
-    input,
-    el('button', { type: 'submit', className: 'btn add-link-btn', title: 'Add tab' }, icon(ICONS.plus))
-  );
+  const add = el('button', { type: 'submit', className: 'btn add-link-btn', title: 'Add tab' }, icon(ICONS.plus), el('span', { textContent: 'Add' }));
+  add.setAttribute('aria-label', 'Add tab to session');
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const form = el('form', { className: 'add-link-form' }, input, add);
+  form.setAttribute('aria-label', 'Add a tab to this session');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
     const url = input.value.trim();
     if (!isLinkable(url)) {
       input.setCustomValidity('Enter an http:// or https:// URL');
       input.reportValidity();
-      input.setCustomValidity(''); // the bubble stays up; don't leave the field stuck invalid
+      input.setCustomValidity('');
       return;
     }
     const tab = { title: new URL(url).hostname, url };
@@ -94,67 +157,103 @@ function addLinkForm(session) {
   return form;
 }
 
+function sessionHeadingId(session) {
+  const safe = String(sessionIdOf(session)).replace(/[^a-zA-Z0-9_-]/g, '-');
+  return `session-heading-${safe || 'saved'}`;
+}
+
 function sessionCard(session, visibleTabs) {
-  const restore = el('button', { className: 'btn' }, icon(ICONS.restore), 'Restore');
+  const headingId = sessionHeadingId(session);
+  const sessionDate = new Date(session.date).toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  const count = session.tabs.length;
+
+  const restore = el('button', { className: 'btn btn-session-primary', type: 'button' }, icon(ICONS.restore), el('span', { textContent: 'Restore in new window' }));
   restore.addEventListener('click', () => {
-    const urls = session.tabs.map(t => t.url).filter(isLinkable);
+    const urls = session.tabs.map(tab => tab.url).filter(isLinkable);
     if (urls.length) chrome.windows.create({ url: urls });
   });
 
-  // Restore here: reopen the session into the dashboard's own window.
-  const restoreHere = el('button', { className: 'btn btn-restore-here' }, icon(ICONS.restore), 'Restore here');
+  const restoreHere = el('button', { className: 'btn btn-session-secondary btn-restore-here', type: 'button' }, icon(ICONS.restore), el('span', { textContent: 'Restore here' }));
   restoreHere.addEventListener('click', async () => {
-    const urls = session.tabs.map(t => t.url).filter(isLinkable);
+    const urls = session.tabs.map(tab => tab.url).filter(isLinkable);
     if (!urls.length) return;
-    for (const url of urls) {
-      await chrome.tabs.create({ url });
-    }
-    statusEl.textContent = `Opened ${urls.length} tab${urls.length === 1 ? '' : 's'} in this window.`;
-    statusEl.classList.remove('error');
+    for (const url of urls) await chrome.tabs.create({ url });
+    setDashboardStatus(`Opened ${urls.length} ${plural(urls.length, 'tab', 'tabs')} in this window.`);
   });
 
-  // Inline two-step confirm instead of a browser dialog.
   const removeLabel = el('span', { textContent: 'Delete' });
-  const remove = el('button', { className: 'btn btn-danger' }, icon(ICONS.trash), removeLabel);
+  const remove = el('button', { className: 'btn btn-danger btn-session-delete', type: 'button' }, icon(ICONS.trash), removeLabel);
+  remove.setAttribute('aria-label', `Delete session saved ${sessionDate}`);
   let armed = false;
+  let resetTimer;
   remove.addEventListener('click', async () => {
     if (!armed) {
       armed = true;
-      removeLabel.textContent = 'Confirm?';
+      removeLabel.textContent = 'Confirm delete?';
       remove.classList.add('armed');
-      setTimeout(() => {
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
         armed = false;
         removeLabel.textContent = 'Delete';
         remove.classList.remove('armed');
       }, 3000);
       return;
     }
+    clearTimeout(resetTimer);
     await mutate('SESSION_DELETE', { sessionId: sessionIdOf(session) });
   });
 
-  const count = session.tabs.length;
-  return el('div', { className: 'session' },
-    el('h2', {
-      textContent: new Date(session.date).toLocaleDateString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      })
-    }),
-    el('p', { className: 'meta', textContent: `${count} tab${count === 1 ? '' : 's'}` }),
-    el('div', { className: 'btn-row' }, restore, restoreHere, remove),
+  const article = el('article', { className: 'session' },
+    el('header', { className: 'session-card-header' },
+      el('div', { className: 'session-heading-group' },
+        el('p', { className: 'session-eyebrow', textContent: 'Saved workspace' }),
+        el('h2', { id: headingId, textContent: sessionDate }),
+        el('p', { className: 'meta', textContent: `${count} ${plural(count, 'tab', 'tabs')}` })
+      )
+    ),
+    el('div', { className: 'session-actions' }, restore, restoreHere),
+    el('div', { className: 'session-danger-zone' }, remove),
+    el('div', { className: 'session-tabs-heading' },
+      el('span', { textContent: 'Tabs' }),
+      el('span', { className: 'session-visible-count', textContent: `${visibleTabs.length} shown` })
+    ),
     el('div', { className: 'links-list' }, ...visibleTabs.map(tab => linkRow(session, tab))),
-    addLinkForm(session)
+    el('footer', { className: 'session-card-footer' }, addLinkForm(session))
   );
+  article.setAttribute('aria-labelledby', headingId);
+  return article;
+}
+
+function emptyState(query) {
+  const state = el('div', { className: 'empty-state' });
+  if (query) {
+    state.append(
+      el('h2', { textContent: 'No saved tabs match that search.' }),
+      el('p', { textContent: `Nothing matched “${query}”. Try another term or clear the search.` })
+    );
+    const clear = el('button', { type: 'button', className: 'btn empty-state-action', textContent: 'Clear search' });
+    clear.addEventListener('click', clearSearch);
+    state.append(clear);
+  } else {
+    state.append(
+      el('h2', { textContent: 'No saved sessions yet.' }),
+      el('p', { textContent: 'Use Save Session from the Tab Organizer popup and your saved workspace will appear here.' })
+    );
+  }
+  return state;
 }
 
 function render() {
+  if (!container || !searchInput) return;
   const visible = filterSessions(sessions, searchInput.value);
+  const query = searchInput.value.trim();
+  updateDashboardSummary(visible);
   container.textContent = '';
 
   if (visible.length === 0) {
-    container.append(el('div', {
-      className: 'empty-state',
-      textContent: searchInput.value.trim() ? 'No saved tabs match that search.' : 'No saved sessions yet.'
-    }));
+    container.append(emptyState(query));
     return;
   }
 
@@ -163,11 +262,11 @@ function render() {
   }
 }
 
-let searchTimer;
-searchInput.addEventListener('input', () => {
+searchInput?.addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(render, 150);
 });
+clearSearchBtn?.addEventListener('click', clearSearch);
 
 async function loadSessions() {
   const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
@@ -177,28 +276,22 @@ async function loadSessions() {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.savedSessions) {
-    sessions = changes.savedSessions.newValue || [];
+    sessions = Array.isArray(changes.savedSessions.newValue) ? changes.savedSessions.newValue : [];
     render();
   }
 });
 
 async function mutate(action, payload) {
-  statusEl.textContent = '';
-  statusEl.classList.remove('error');
+  setDashboardStatus('');
   try {
     const response = await chrome.runtime.sendMessage({ action, ...payload });
     if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
-    await loadSessions().catch((err) => {
-  statusEl.textContent = err?.message || 'Failed to load sessions.';
-  statusEl.classList.add('error');
-});
+    await loadSessions();
   } catch (err) {
-    statusEl.textContent = err?.message || 'Something went wrong.';
-    statusEl.classList.add('error');
+    setDashboardStatus(err?.message || 'Something went wrong.', true);
   }
 }
 
 loadSessions().catch((err) => {
-  statusEl.textContent = err?.message || 'Failed to load sessions.';
-  statusEl.classList.add('error');
+  setDashboardStatus(err?.message || 'Failed to load sessions.', true);
 });

@@ -22,44 +22,105 @@ async function loadPage(htmlFile, scriptFiles, stub) {
 }
 
 module.exports = async function main() {
-  // dashboard: renders sessions as textContent with http(s)-only hrefs
+  // dashboard: renders sessions safely and exposes the hybrid dashboard structure.
   const stub = makeBrowserChromeStub({
     savedSessions: [{
       date: '2026-08-09T10:00:00.000Z',
       tabs: [
-        { title: 'Safe', url: 'https://a.com/' },
+        { title: 'Safe', url: 'https://www.a.com/' },
         { title: '<img src=x onerror=alert(1)>', url: 'javascript:alert(1)' }
       ]
     }]
   });
   let dom = await loadPage('session.html', ['logic.js', 'session.js'], stub);
-  // placeholders must be proper UTF-8, never mojibake
-  assert.strictEqual(dom.window.document.getElementById('search').placeholder, 'Search saved tabs…');
+
+  // semantic shell, responsive metadata and live summary.
+  assert.strictEqual(dom.window.document.documentElement.lang, 'en');
+  assert.ok(dom.window.document.querySelector('meta[name="viewport"]'));
+  assert.ok(dom.window.document.querySelector('main.dashboard-main'));
+  assert.ok(dom.window.document.querySelector('.dashboard-subtitle'));
+  assert.strictEqual(dom.window.document.getElementById('session-count').textContent, '1 session');
+  assert.strictEqual(dom.window.document.getElementById('tab-count').textContent, '2 tabs');
+  const search = dom.window.document.getElementById('search');
+  assert.strictEqual(search.placeholder, 'Search saved tabs…');
+  assert.strictEqual(search.getAttribute('aria-controls'), 'sessions-container');
+  assert.ok(dom.window.document.querySelector('label[for="search"]'));
+  const clearSearch = dom.window.document.getElementById('clear-search');
+  assert.ok(clearSearch.getAttribute('aria-label'));
+  assert.strictEqual(clearSearch.hidden, true);
   assert.strictEqual(dom.window.document.querySelector('.add-link-form input').placeholder, 'Paste URL…');
+
+  // cards have semantic relationships and a clear action hierarchy.
+  const firstCard = dom.window.document.querySelector('article.session');
+  assert.ok(firstCard, 'session is an article');
+  assert.ok(firstCard.getAttribute('aria-labelledby'));
+  assert.strictEqual(firstCard.querySelector('.btn-session-primary').textContent.includes('Restore in new window'), true);
+  assert.strictEqual(firstCard.querySelector('.btn-session-secondary').textContent.includes('Restore here'), true);
+  assert.ok(firstCard.querySelector('.btn-session-delete'));
+  assert.strictEqual(firstCard.querySelector('.link-host').textContent, 'a.com');
+  assert.match(firstCard.querySelector('.delete-link-btn').getAttribute('aria-label'), /Remove Safe/);
+
   let links = [...dom.window.document.querySelectorAll('.link')];
   assert.strictEqual(links.length, 2);
   assert.strictEqual(links[0].textContent, 'Safe');
-  assert.strictEqual(links[0].href, 'https://a.com/');
+  assert.strictEqual(links[0].href, 'https://www.a.com/');
   assert.strictEqual(links[1].textContent, '<img src=x onerror=alert(1)>');
   assert.ok(!links[1].querySelector('img'), 'no img element from title');
   assert.strictEqual(links[1].getAttribute('href'), null, 'non-http URL gets no href');
 
-  // dashboard: search filters via filterSessions, debounced
-  dom.window.document.getElementById('search').value = 'Safe';
-  dom.window.document.getElementById('search').dispatchEvent(new dom.window.Event('input'));
+  // dashboard: search filters via filterSessions, reports matches, and clears immediately.
+  search.value = 'Safe';
+  search.dispatchEvent(new dom.window.Event('input'));
   await new Promise(r => setTimeout(r, 200));
   links = [...dom.window.document.querySelectorAll('.link')];
   assert.strictEqual(links.length, 1);
   assert.strictEqual(links[0].textContent, 'Safe');
+  assert.strictEqual(dom.window.document.getElementById('result-summary').textContent, '1 session · 1 matching tab');
+  assert.strictEqual(clearSearch.hidden, false);
+  clearSearch.click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(search.value, '');
+  assert.strictEqual(clearSearch.hidden, true);
+  assert.strictEqual(dom.window.document.querySelectorAll('.link').length, 2);
+
+  // dashboard: query-aware empty state offers the same clear-search escape hatch.
+  search.value = 'does-not-exist';
+  search.dispatchEvent(new dom.window.Event('input'));
+  await new Promise(r => setTimeout(r, 200));
+  const noMatch = dom.window.document.querySelector('.empty-state');
+  assert.ok(noMatch.textContent.includes('No saved tabs match'));
+  const noMatchClear = noMatch.querySelector('.empty-state-action');
+  assert.ok(noMatchClear, 'no-match state has a clear search action');
+  noMatchClear.click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(search.value, '');
+  assert.strictEqual(dom.window.document.querySelectorAll('.link').length, 2);
+
+  // dashboard: zero-session state explains how sessions appear here.
+  const emptyDom = await loadPage('session.html', ['logic.js', 'session.js'], makeBrowserChromeStub({ savedSessions: [] }));
+  const emptyState = emptyDom.window.document.querySelector('.empty-state');
+  assert.ok(emptyState.textContent.includes('Save Session'));
+  assert.strictEqual(emptyState.querySelector('.empty-state-action'), null);
+
+  // dashboard: plural total summary is correct.
+  const pluralDom = await loadPage('session.html', ['logic.js', 'session.js'], makeBrowserChromeStub({
+    savedSessions: [
+      { date: '2026-08-09T10:00:00.000Z', tabs: [{ title: 'A', url: 'https://a.com/' }] },
+      { date: '2026-08-09T11:00:00.000Z', tabs: [{ title: 'B', url: 'https://b.com/' }, { title: 'C', url: 'https://c.com/' }] }
+    ]
+  }));
+  assert.strictEqual(pluralDom.window.document.getElementById('session-count').textContent, '2 sessions');
+  assert.strictEqual(pluralDom.window.document.getElementById('tab-count').textContent, '3 tabs');
 
   // dashboard: storage.onChanged re-renders when another context changes data
-  dom.window.document.getElementById('search').value = ''; // clear the search from the previous section
   stub._stored.savedSessions = [{ date: '2026-08-09T11:00:00.000Z', tabs: [{ title: 'Fresh', url: 'https://fresh.com/' }] }];
   stub._emit({ savedSessions: { oldValue: [], newValue: stub._stored.savedSessions } });
   await new Promise(r => setTimeout(r, 0));
   links = [...dom.window.document.querySelectorAll('.link')];
   assert.strictEqual(links.length, 1);
   assert.strictEqual(links[0].textContent, 'Fresh');
+  assert.strictEqual(dom.window.document.getElementById('session-count').textContent, '1 session');
+  assert.strictEqual(dom.window.document.getElementById('tab-count').textContent, '1 tab');
 
   // dashboard: add-tab form sends SESSION_ADD_TAB with a validated URL
   const messages = [];
@@ -73,7 +134,6 @@ module.exports = async function main() {
   assert.strictEqual(messages[0].sessionId, '2026-08-09T11:00:00.000Z');
   assert.strictEqual(messages[0].tab.title, 'new.com');
   assert.strictEqual(messages[0].tab.url, 'https://new.com/');
-
 
   // dashboard: Restore here opens linkable tabs in the current window
   const hereStub = makeBrowserChromeStub({
@@ -91,6 +151,7 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(hereStub._stored._created, ['https://a.com/', 'https://b.com/']);
   assert.strictEqual(hereStatus.textContent, 'Opened 2 tabs in this window.');
+
   // dashboard: two-step delete confirm, then SESSION_DELETE
   const deleteStub = makeBrowserChromeStub({
     savedSessions: [{ date: '2026-08-09T10:00:00.000Z', tabs: [{ title: 'A', url: 'https://a.com/' }] }]
@@ -98,7 +159,7 @@ module.exports = async function main() {
   const deleteMessages = [];
   deleteStub.runtime.sendMessage = async (msg) => { deleteMessages.push(msg); return { status: 'done', count: 1 }; };
   dom = await loadPage('session.html', ['logic.js', 'session.js'], deleteStub);
-  const removeBtn = dom.window.document.querySelector('.btn-row .btn-danger');
+  const removeBtn = dom.window.document.querySelector('.btn-danger');
   removeBtn.click();
   assert.strictEqual(removeBtn.textContent.includes('Confirm'), true);
   removeBtn.click();
@@ -106,6 +167,7 @@ module.exports = async function main() {
   assert.strictEqual(deleteMessages.length, 1);
   assert.strictEqual(deleteMessages[0].action, 'SESSION_DELETE');
   assert.strictEqual(deleteMessages[0].sessionId, '2026-08-09T10:00:00.000Z');
+
   // dashboard: mutation errors surface in the status line, not silently
   const errStub = makeBrowserChromeStub({
     savedSessions: [{ date: '2026-08-09T10:00:00.000Z', tabs: [{ title: 'A', url: 'https://a.com/' }] }]
@@ -113,7 +175,7 @@ module.exports = async function main() {
   errStub.runtime.sendMessage = async () => ({ status: 'error', error: 'Quota exceeded' });
   dom = await loadPage('session.html', ['logic.js', 'session.js'], errStub);
   const dashboardStatus = dom.window.document.getElementById('status');
-  const dangerBtn = dom.window.document.querySelector('.btn-row .btn-danger');
+  const dangerBtn = dom.window.document.querySelector('.btn-danger');
   dangerBtn.click(); // arm
   dangerBtn.click(); // confirm -> mutation fails
   await new Promise(r => setTimeout(r, 10));
@@ -133,7 +195,6 @@ module.exports = async function main() {
   const failStatus = dom.window.document.getElementById('status');
   assert.strictEqual(failStatus.textContent, 'Storage read failed');
 
-
   // regression: logic.js + session.js run in ONE shared scope in a real browser.
   // A later const destructuring of a logic.js function name is a SyntaxError there.
   const logicSrc = fs.readFileSync(path.join(ROOT, 'logic.js'), 'utf8');
@@ -146,6 +207,7 @@ module.exports = async function main() {
   });
   assert.doesNotThrow(() => scopeDom.window.eval(logicSrc + '\n' + sessionSrc), 'session.js must not redeclare logic.js names');
   assert.doesNotThrow(() => scopeDom.window.eval(logicSrc + '\n' + popupSrc), 'popup.js must not redeclare logic.js names');
+
   // error-report: uncaught errors and rejections show in the status line
   dom = await loadPage('session.html', ['error-report.js', 'logic.js', 'session.js'], makeBrowserChromeStub({ savedSessions: [] }));
   const erStatus = dom.window.document.getElementById('status');
@@ -156,7 +218,6 @@ module.exports = async function main() {
   rejection.reason = new dom.window.Error('Rejecto');
   dom.window.dispatchEvent(rejection);
   assert.strictEqual(erStatus.textContent, 'Rejecto');
-
 
   // popup: Undo Close sends UNDO_CLOSE and reports the result
   const undoStub = makeBrowserChromeStub();
@@ -173,7 +234,6 @@ module.exports = async function main() {
   assert.strictEqual(undoMessages[0].action, 'UNDO_CLOSE');
   assert.strictEqual(undoStatus.textContent, '1 tab restored.');
 
-
   // popup: keyboard shortcut chips shown on the actions that have one
   dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], makeBrowserChromeStub());
   const chips = {
@@ -189,6 +249,7 @@ module.exports = async function main() {
   for (const id of ['btn-undo', 'btn-sleep', 'btn-session']) {
     assert.strictEqual(dom.window.document.querySelector(`#${id} .shortcut`), null, id + ' has no suggested shortcut');
   }
+
   // popup: preview counts render into the status line on open
   const previewStub = makeBrowserChromeStub();
   previewStub.runtime.sendMessage = async (msg) => msg.action === 'PREVIEW' ? { status: 'done', count: { duplicates: 3, idle: 2 } } : { status: 'done', count: 1 };
@@ -196,6 +257,7 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 10));
   const previewStatus = dom.window.document.getElementById('status');
   assert.strictEqual(previewStatus.textContent, '3 duplicates · 2 idle tabs');
+
   // popup: View Saved Sessions opens the dashboard and closes the popup
   const viewStub = makeBrowserChromeStub();
   let closed = false;
@@ -207,6 +269,7 @@ module.exports = async function main() {
   await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(viewStub._stored._created, ['chrome-extension://test/session.html']);
   assert.strictEqual(closed, true);
+
   // popup: success and error status lines, buttons re-enabled
   const popupStub = makeBrowserChromeStub();
   const sendLog = [];
