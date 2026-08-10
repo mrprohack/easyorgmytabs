@@ -2,58 +2,108 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="popup">
-  <div class="header">
-    <img src="icon.svg" alt="Logo">
-    <h1>Tab Organizer</h1>
+  <div class="popup-header">
+    <div class="brand">
+      <img src="icon.svg" alt="Tab Organizer logo">
+      <div>
+        <h1>Tab Organizer</h1>
+        <p>Clean tabs, your way.</p>
+      </div>
+    </div>
   </div>
 
-  <button id="btn-date" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-    Arrange by Date
-  
-    <span class="shortcut">Alt+Shift+D</span></button>
+  <section class="popup-card organize-card" aria-labelledby="organize-heading">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Organize</span>
+        <h2 id="organize-heading">Choose a grouping style</h2>
+      </div>
+      <span id="organize-mode" class="mode-pill">Not organized</span>
+    </div>
 
-  <button id="btn-website" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-    Arrange by Website
-  
-    <span class="shortcut">Alt+Shift+W</span></button>
+    <p class="section-help">Switch anytime. Tab Organizer rebuilds only its own groups; your manual Chrome groups stay untouched.</p>
 
-  <button id="btn-dedupe" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-    Close Duplicates
-  
-    <span class="shortcut">Alt+Shift+X</span></button>
+    <div class="organize-actions">
+      <button id="btn-date" class="btn organize-btn" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span class="btn-copy">
+          <strong>By Date</strong>
+          <small>Today, week, month</small>
+        </span>
+        <span class="shortcut">Alt+Shift+D</span>
+      </button>
 
-  <button id="btn-undo" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
-    Undo Close
-  </button>
+      <button id="btn-website" class="btn organize-btn" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+        <span class="btn-copy">
+          <strong>By Website</strong>
+          <small>Group matching domains</small>
+        </span>
+        <span class="shortcut">Alt+Shift+W</span>
+      </button>
+    </div>
 
-  <button id="btn-sleep" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-    Sleep Inactive
-  </button>
+    <button id="btn-ungroup" class="btn btn-secondary btn-ungroup">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h4v4H7zM13 13h4v4h-4zM4 17h5m6-10h5M9 9l6 6"/></svg>
+      Ungroup organized
+      <span class="safe-label">Manual groups stay safe</span>
+    </button>
+  </section>
 
-  <label class="setting">
-    idle over
-    <input id="sleep-hours" class="input" type="number" min="0.25" max="168" step="0.25" value="1">
-    hours
-  </label>
+  <section class="popup-card" aria-labelledby="tools-heading">
+    <div class="section-heading compact-heading">
+      <div>
+        <span class="eyebrow">Power tools</span>
+        <h2 id="tools-heading">Clean &amp; reduce clutter</h2>
+      </div>
+    </div>
 
-  <button id="btn-session" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
-    Save Session
-  </button>
+    <button id="btn-dedupe" class="btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+      Close Duplicates
+      <span class="shortcut">Alt+Shift+X</span>
+    </button>
 
-  <button id="btn-view-sessions" class="btn">
-    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
-    View Saved Sessions
-  
-    <span class="shortcut">Alt+Shift+S</span></button>
+    <button id="btn-undo" class="btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+      Undo Close
+    </button>
+
+    <button id="btn-sleep" class="btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      Sleep Inactive
+    </button>
+
+    <label class="setting">
+      Sleep tabs idle over
+      <input id="sleep-hours" class="input" type="number" min="0.25" max="168" step="0.25" value="1">
+      hours
+    </label>
+  </section>
+
+  <section class="popup-card" aria-labelledby="sessions-heading">
+    <div class="section-heading compact-heading">
+      <div>
+        <span class="eyebrow">Sessions</span>
+        <h2 id="sessions-heading">Save a workspace</h2>
+      </div>
+    </div>
+
+    <button id="btn-session" class="btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+      Save Current Session
+    </button>
+
+    <button id="btn-view-sessions" class="btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+      View Saved Sessions
+      <span class="shortcut">Alt+Shift+S</span>
+    </button>
+  </section>
 
   <p id="status" class="status" role="status" aria-live="polite"></p>
 
