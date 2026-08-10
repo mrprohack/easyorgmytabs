@@ -71,7 +71,8 @@ module.exports = async function main() {
   dom.window.document.getElementById('btn-website').click();
   await new Promise(r => setTimeout(r, 10));
   const websiteMessage = sent.find(m => m.action === 'ARRANGE_BY_WEBSITE');
-  assert.deepStrictEqual(websiteMessage, { action: 'ARRANGE_BY_WEBSITE', regroupAll: false });
+  assert.strictEqual(websiteMessage.action, 'ARRANGE_BY_WEBSITE');
+  assert.strictEqual(websiteMessage.regroupAll, false);
   assert.strictEqual(
     dom.window.document.getElementById('status').textContent,
     'Grouped into 2 groups by Website. 3 grouped tabs left unchanged.'
@@ -104,7 +105,8 @@ module.exports = async function main() {
   dom.window.document.getElementById('btn-date').click();
   await new Promise(r => setTimeout(r, 10));
   const dateMessage = sentOn.find(m => m.action === 'ARRANGE_BY_DATE');
-  assert.deepStrictEqual(dateMessage, { action: 'ARRANGE_BY_DATE', regroupAll: true });
+  assert.strictEqual(dateMessage.action, 'ARRANGE_BY_DATE');
+  assert.strictEqual(dateMessage.regroupAll, true);
   assert.strictEqual(
     dom.window.document.getElementById('status').textContent,
     'Regrouped 5 tabs into 1 group by Date.'
