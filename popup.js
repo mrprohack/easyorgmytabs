@@ -236,14 +236,12 @@ function initPopup() {
     }
   });
 
-  shortcutsSettingsBtn?.addEventListener('click', async () => {
-    try {
-      await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-      window.close();
-    } catch (err) {
-      console.error('Failed to open Chrome keyboard shortcut settings:', err);
-      setStatus('Open chrome://extensions/shortcuts in Chrome to assign or change shortcuts.', true);
-    }
+  shortcutsSettingsBtn?.addEventListener('click', () => {
+    // Chrome exposes shortcut management at this privileged browser URL, but an
+    // extension cannot reliably navigate a normal tab to chrome:// pages. Keep
+    // the popup open and give the user the exact address instead of opening a
+    // blank tab that looks like the shortcut action failed again.
+    setStatus('Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.');
   });
 
   // Preview: show duplicate/idle counts when the popup opens.
