@@ -92,10 +92,10 @@
 **Interfaces:**
 - E2E uses actual Chrome `groupId` values and actual popup element rectangles.
 
-- [ ] Extend Chromium E2E: create manual grouped tabs plus a pinned grouped tab.
+- [ ] Extend Chromium E2E with manual groups plus a pinned tab that must stay outside automatic grouping.
 - [ ] Verify Regroup all Off leaves existing groups unchanged and groups only ungrouped tabs.
-- [ ] Toggle On and verify Date/Website rebuilds all non-pinned grouped tabs while pinned grouped tab remains grouped.
-- [ ] Verify Ungroup all removes every non-pinned group and leaves pinned group intact.
+- [ ] Toggle On and verify Date/Website rebuilds all non-pinned grouped tabs while the pinned tab remains excluded.
+- [ ] Verify Ungroup all removes every non-pinned group, including a newly-created unknown/manual group, while leaving the pinned tab untouched.
 - [ ] Assert each visible `.shortcut` rectangle does not intersect its action label rectangle.
 - [ ] Assert popup natural height <= 600px.
 - [ ] Update README/ADR copy to describe explicit Off/On semantics.
