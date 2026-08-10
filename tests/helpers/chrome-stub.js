@@ -133,8 +133,9 @@ function makeChromeStub(tabs, stored = {}, opts = {}) {
 
 
 // Browser-style stub for jsdom tests of popup.html / session.html.
-function makeBrowserChromeStub({ savedSessions = [] } = {}) {
+function makeBrowserChromeStub({ savedSessions = [], regroupAll = false } = {}) {
   const stored = { savedSessions };
+  const syncStored = { sleepHours: 1, regroupAll };
   const sessionStored = {};
   const listeners = new Set();
   const local = {
@@ -147,8 +148,23 @@ function makeBrowserChromeStub({ savedSessions = [] } = {}) {
       }
     }
   };
+  const sync = {
+    async get(key) {
+      if (Array.isArray(key)) return Object.fromEntries(key.filter(k => k in syncStored).map(k => [k, syncStored[k]]));
+      if (key && typeof key === 'object') {
+        const result = { ...key };
+        for (const k of Object.keys(key)) if (k in syncStored) result[k] = syncStored[k];
+        return result;
+      }
+      if (key === null || key === undefined) return { ...syncStored };
+      return key in syncStored ? { [key]: syncStored[key] } : {};
+    },
+    async set(items) { Object.assign(syncStored, items); },
+    onChanged: { addListener() {} }
+  };
   return {
     _stored: stored,
+    _syncStored: syncStored,
     _sessionStored: sessionStored,
     _emit: (changes) => { for (const fn of listeners) fn(changes, 'local'); },
     storage: {
@@ -157,11 +173,7 @@ function makeBrowserChromeStub({ savedSessions = [] } = {}) {
         async get(key) { return key in sessionStored ? { [key]: sessionStored[key] } : {}; },
         async set(items) { Object.assign(sessionStored, items); }
       },
-      sync: {
-        async get() { return { sleepHours: 1 }; },
-        async set() {},
-        onChanged: { addListener() {} }
-      },
+      sync,
       onChanged: { addListener: (fn) => listeners.add(fn) }
     },
     runtime: {

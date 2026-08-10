@@ -45,36 +45,35 @@ function removeOwnedEntriesForScope(registry, tabs, removedGroupIds = new Set())
   return next;
 }
 
-async function prepareTabsForGrouping(tabs) {
+async function prepareTabsForGrouping(tabs, { regroupAll = false } = {}) {
   const registry = await readOwnedGroups();
-  const ownedGroupIds = new Set();
-  const ownedTabIds = [];
-  let manualGroupedTabs = 0;
+  const groupedTabs = tabs.filter(hasExistingGroup);
+  const pinnedGroupedTabs = groupedTabs.filter(tab => tab.pinned).length;
+  const regroupedTabIds = [];
+  const removedGroupIds = new Set();
 
-  for (const tab of tabs) {
-    if (!hasExistingGroup(tab)) continue;
-    const metadata = registry[String(tab.groupId)];
-    if (metadata && metadata.windowId === tab.windowId) {
-      ownedGroupIds.add(tab.groupId);
-      if (tab.id !== undefined) ownedTabIds.push(tab.id);
-    } else {
-      manualGroupedTabs++;
+  if (regroupAll) {
+    for (const tab of groupedTabs) {
+      if (tab.pinned || tab.id === undefined) continue;
+      regroupedTabIds.push(tab.id);
+      removedGroupIds.add(tab.groupId);
+    }
+    if (regroupedTabIds.length > 0) {
+      await chrome.tabs.ungroup(regroupedTabIds);
     }
   }
 
-  if (ownedTabIds.length > 0) {
-    await chrome.tabs.ungroup(ownedTabIds);
-  }
-
-  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, ownedGroupIds);
+  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, removedGroupIds);
   if (JSON.stringify(nextRegistry) !== JSON.stringify(registry)) {
     await writeOwnedGroups(nextRegistry);
   }
 
+  const regroupedIds = new Set(regroupedTabIds);
   return {
-    tabs: tabs.map(tab => ownedGroupIds.has(tab.groupId) ? { ...tab, groupId: -1 } : tab),
-    regroupedTabs: ownedTabIds.length,
-    manualGroupedTabs
+    tabs: tabs.map(tab => regroupedIds.has(tab.id) ? { ...tab, groupId: -1 } : tab),
+    regroupedTabs: regroupedTabIds.length,
+    preservedGroupedTabs: regroupAll ? pinnedGroupedTabs : groupedTabs.length,
+    pinnedGroupedTabs
   };
 }
 
@@ -212,27 +211,36 @@ async function createGroups(entries) {
   return (await createGroupsDetailed(entries)).count;
 }
 
-function buildGroupingResult({ created, mode, regroupedTabs, manualGroupedTabs }) {
+function buildGroupingResult({
+  created,
+  mode,
+  regroupAll = false,
+  regroupedTabs = 0,
+  preservedGroupedTabs = 0,
+  pinnedGroupedTabs = 0
+}) {
   const code = regroupedTabs > 0
-    ? 'REGROUPED'
-    : manualGroupedTabs > 0
+    ? 'REGROUPED_ALL'
+    : preservedGroupedTabs > 0
       ? 'PRESERVED_EXISTING_GROUPS'
       : undefined;
   const result = makeActionResult({
     changed: created,
-    skipped: manualGroupedTabs,
+    skipped: preservedGroupedTabs,
     code,
     status: created > 0 ? 'ok' : regroupedTabs > 0 ? 'partial' : undefined
   });
   result.mode = mode;
+  result.regroupAll = regroupAll;
   result.regroupedTabs = regroupedTabs;
-  result.manualGroupedTabs = manualGroupedTabs;
+  result.preservedGroupedTabs = preservedGroupedTabs;
+  result.pinnedGroupedTabs = pinnedGroupedTabs;
   return result;
 }
 
-async function arrangeByWebsiteResult({ currentWindow = false } = {}) {
+async function arrangeByWebsiteResult({ currentWindow = false, regroupAll = false } = {}) {
   const queriedTabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
-  const prepared = await prepareTabsForGrouping(queriedTabs);
+  const prepared = await prepareTabsForGrouping(queriedTabs, { regroupAll });
   const tabs = prepared.tabs;
 
   const windowGroups = {};
@@ -267,8 +275,10 @@ async function arrangeByWebsiteResult({ currentWindow = false } = {}) {
   return buildGroupingResult({
     created,
     mode: 'website',
+    regroupAll,
     regroupedTabs: prepared.regroupedTabs,
-    manualGroupedTabs: prepared.manualGroupedTabs
+    preservedGroupedTabs: prepared.preservedGroupedTabs,
+    pinnedGroupedTabs: prepared.pinnedGroupedTabs
   });
 }
 
@@ -276,9 +286,9 @@ async function arrangeByWebsite(options = {}) {
   return (await arrangeByWebsiteResult(options)).changed;
 }
 
-async function arrangeByDateResult({ currentWindow = false } = {}) {
+async function arrangeByDateResult({ currentWindow = false, regroupAll = false } = {}) {
   const queriedTabs = await chrome.tabs.query(currentWindow ? { currentWindow: true } : {});
-  const prepared = await prepareTabsForGrouping(queriedTabs);
+  const prepared = await prepareTabsForGrouping(queriedTabs, { regroupAll });
   const tabs = prepared.tabs;
 
   const groups = {};
@@ -313,8 +323,10 @@ async function arrangeByDateResult({ currentWindow = false } = {}) {
   return buildGroupingResult({
     created,
     mode: 'date',
+    regroupAll,
     regroupedTabs: prepared.regroupedTabs,
-    manualGroupedTabs: prepared.manualGroupedTabs
+    preservedGroupedTabs: prepared.preservedGroupedTabs,
+    pinnedGroupedTabs: prepared.pinnedGroupedTabs
   });
 }
 
@@ -322,44 +334,37 @@ async function arrangeByDate(options = {}) {
   return (await arrangeByDateResult(options)).changed;
 }
 
-async function ungroupOrganizedResult() {
+async function ungroupAllResult() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const registry = await readOwnedGroups();
-  const ownedGroupIds = new Set();
-  const ownedTabIds = [];
-  let manualGroupedTabs = 0;
+  const groupedTabs = tabs.filter(hasExistingGroup);
+  const pinnedGroupedTabs = groupedTabs.filter(tab => tab.pinned).length;
+  const tabIds = groupedTabs
+    .filter(tab => !tab.pinned && tab.id !== undefined)
+    .map(tab => tab.id);
+  const removedGroupIds = new Set(
+    groupedTabs.filter(tab => !tab.pinned).map(tab => tab.groupId)
+  );
 
-  for (const tab of tabs) {
-    if (!hasExistingGroup(tab)) continue;
-    const metadata = registry[String(tab.groupId)];
-    if (metadata && metadata.windowId === tab.windowId) {
-      ownedGroupIds.add(tab.groupId);
-      if (tab.id !== undefined) ownedTabIds.push(tab.id);
-    } else {
-      manualGroupedTabs++;
-    }
+  if (tabIds.length > 0) await chrome.tabs.ungroup(tabIds);
+
+  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, removedGroupIds);
+  if (JSON.stringify(nextRegistry) !== JSON.stringify(registry)) {
+    await writeOwnedGroups(nextRegistry);
   }
 
-  if (ownedTabIds.length > 0) await chrome.tabs.ungroup(ownedTabIds);
-  const nextRegistry = removeOwnedEntriesForScope(registry, tabs, ownedGroupIds);
-  if (JSON.stringify(nextRegistry) !== JSON.stringify(registry)) await writeOwnedGroups(nextRegistry);
-
   const result = makeActionResult({
-    changed: ownedTabIds.length,
-    skipped: manualGroupedTabs,
-    code: ownedTabIds.length > 0
-      ? 'UNGROUPED_ORGANIZED'
-      : manualGroupedTabs > 0
-        ? 'PRESERVED_EXISTING_GROUPS'
-        : undefined
+    changed: tabIds.length,
+    skipped: pinnedGroupedTabs,
+    code: tabIds.length > 0 ? 'UNGROUPED_ALL' : undefined
   });
   result.mode = null;
-  result.manualGroupedTabs = manualGroupedTabs;
+  result.pinnedGroupedTabs = pinnedGroupedTabs;
   return result;
 }
 
-async function ungroupOrganized() {
-  return (await ungroupOrganizedResult()).changed;
+async function ungroupAll() {
+  return (await ungroupAllResult()).changed;
 }
 
 async function closeDuplicates() {
@@ -454,7 +459,7 @@ async function saveSession() {
 const HANDLERS = {
   ARRANGE_BY_DATE: arrangeByDate,
   ARRANGE_BY_WEBSITE: arrangeByWebsite,
-  UNGROUP_ORGANIZED: ungroupOrganized,
+  UNGROUP_ALL: ungroupAll,
   GROUPING_STATE: groupingState,
   CLOSE_DUPLICATES: closeDuplicates,
   SLEEP_INACTIVE: sleepInactive,
@@ -481,13 +486,19 @@ async function executeAction(request = {}) {
   let result;
   switch (action) {
     case 'ARRANGE_BY_WEBSITE':
-      result = await arrangeByWebsiteResult({ currentWindow: request?.allWindows !== true });
+      result = await arrangeByWebsiteResult({
+        currentWindow: request?.allWindows !== true,
+        regroupAll: request?.regroupAll === true
+      });
       break;
     case 'ARRANGE_BY_DATE':
-      result = await arrangeByDateResult({ currentWindow: request?.allWindows !== true });
+      result = await arrangeByDateResult({
+        currentWindow: request?.allWindows !== true,
+        regroupAll: request?.regroupAll === true
+      });
       break;
-    case 'UNGROUP_ORGANIZED':
-      result = await ungroupOrganizedResult();
+    case 'UNGROUP_ALL':
+      result = await ungroupAllResult();
       break;
     case 'SAVE_SESSION':
       result = await saveSessionResult();
@@ -514,9 +525,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-// Keyboard commands use the same safe defaults as popup actions.
+// Keyboard commands use the saved Regroup all preference for Date/Website.
 chrome.commands.onCommand.addListener((command) => {
   if (!HANDLERS[command]) return;
-  executeAction({ action: command })
-    .catch((err) => console.error(`${command} failed:`, err));
+
+  const run = async () => {
+    const request = { action: command };
+    if (command === 'ARRANGE_BY_DATE' || command === 'ARRANGE_BY_WEBSITE') {
+      const { regroupAll = false } = await chrome.storage.sync.get('regroupAll');
+      request.regroupAll = regroupAll === true;
+    }
+    await executeAction(request);
+  };
+
+  run().catch((err) => console.error(`${command} failed:`, err));
 });

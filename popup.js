@@ -1,20 +1,20 @@
 const ACTIONS = {
   'btn-date': 'ARRANGE_BY_DATE',
   'btn-website': 'ARRANGE_BY_WEBSITE',
-  'btn-ungroup': 'UNGROUP_ORGANIZED',
+  'btn-ungroup': 'UNGROUP_ALL',
   'btn-dedupe': 'CLOSE_DUPLICATES',
   'btn-undo': 'UNDO_CLOSE',
   'btn-sleep': 'SLEEP_INACTIVE',
   'btn-session': 'SAVE_SESSION'
 };
 
-const ORGANIZE_ACTIONS = new Set(['ARRANGE_BY_DATE', 'ARRANGE_BY_WEBSITE', 'UNGROUP_ORGANIZED']);
+const ORGANIZE_ACTIONS = new Set(['ARRANGE_BY_DATE', 'ARRANGE_BY_WEBSITE', 'UNGROUP_ALL']);
 
 // [singular, plural, nothing-happened]
 const RESULT_TEXT = {
   ARRANGE_BY_DATE: ['group', 'groups', 'Nothing to arrange.'],
   ARRANGE_BY_WEBSITE: ['group', 'groups', 'Nothing to arrange.'],
-  UNGROUP_ORGANIZED: ['organized tab ungrouped', 'organized tabs ungrouped', 'No Tab Organizer groups to ungroup.'],
+  UNGROUP_ALL: ['grouped tab ungrouped', 'grouped tabs ungrouped', 'No grouped tabs to ungroup.'],
   CLOSE_DUPLICATES: ['duplicate closed', 'duplicates closed', 'No duplicates found.'],
   UNDO_CLOSE: ['tab restored', 'tabs restored', 'Nothing to restore.'],
   SLEEP_INACTIVE: ['tab slept', 'tabs slept', 'No idle tabs to sleep.'],
@@ -25,9 +25,21 @@ function popupUnit(count, one, many) {
   return count === 1 ? one : many;
 }
 
-function manualGroupsSuffix(count) {
+function preservedGroupsSuffix(result) {
+  const preserved = result?.preservedGroupedTabs ?? 0;
+  if (!preserved) return '';
+
+  if (result?.regroupAll && result?.pinnedGroupedTabs > 0) {
+    const pinned = result.pinnedGroupedTabs;
+    return ` ${pinned} pinned grouped ${popupUnit(pinned, 'tab', 'tabs')} left unchanged.`;
+  }
+
+  return ` ${preserved} grouped ${popupUnit(preserved, 'tab', 'tabs')} left unchanged.`;
+}
+
+function pinnedGroupsSuffix(count) {
   if (!count) return '';
-  return ` ${count} manually grouped ${popupUnit(count, 'tab', 'tabs')} preserved.`;
+  return ` ${count} pinned grouped ${popupUnit(count, 'tab', 'tabs')} left unchanged.`;
 }
 
 function formatActionResponse(action, response) {
@@ -36,25 +48,23 @@ function formatActionResponse(action, response) {
 
   if (action === 'ARRANGE_BY_DATE' || action === 'ARRANGE_BY_WEBSITE') {
     const label = action === 'ARRANGE_BY_DATE' ? 'Date' : 'Website';
-    const manualCount = result?.manualGroupedTabs ?? result?.skipped ?? 0;
     let text;
 
-    if (result?.code === 'REGROUPED' && result.regroupedTabs > 0) {
+    if (result?.code === 'REGROUPED_ALL' && result.regroupedTabs > 0) {
       text = `Regrouped ${result.regroupedTabs} ${popupUnit(result.regroupedTabs, 'tab', 'tabs')} into ${count} ${popupUnit(count, 'group', 'groups')} by ${label}.`;
     } else if (count > 0) {
       text = `Grouped into ${count} ${popupUnit(count, 'group', 'groups')} by ${label}.`;
     } else {
       text = 'Nothing to arrange.';
     }
-    return text + manualGroupsSuffix(manualCount);
+    return text + preservedGroupsSuffix(result);
   }
 
-  if (action === 'UNGROUP_ORGANIZED') {
-    const manualCount = result?.manualGroupedTabs ?? result?.skipped ?? 0;
+  if (action === 'UNGROUP_ALL') {
     const text = count > 0
-      ? `Ungrouped ${count} organized ${popupUnit(count, 'tab', 'tabs')}.`
-      : 'No Tab Organizer groups to ungroup.';
-    return text + manualGroupsSuffix(manualCount);
+      ? `Ungrouped ${count} grouped ${popupUnit(count, 'tab', 'tabs')}.`
+      : 'No grouped tabs to ungroup.';
+    return text + pinnedGroupsSuffix(result?.pinnedGroupedTabs ?? 0);
   }
 
   const [one, many, none] = RESULT_TEXT[action];
@@ -78,6 +88,10 @@ function initPopup() {
   const modeEl = document.getElementById('organize-mode');
   const dateBtn = document.getElementById('btn-date');
   const websiteBtn = document.getElementById('btn-website');
+  const regroupToggle = document.getElementById('regroup-all-toggle');
+  const regroupDetail = document.getElementById('regroup-all-detail');
+  const regroupState = document.getElementById('regroup-all-state');
+  let regroupAll = false;
 
   if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') {
     if (statusEl) {
@@ -87,8 +101,19 @@ function initPopup() {
   }
 
   function setStatus(text, isError = false) {
+    if (!statusEl) return;
     statusEl.textContent = text;
     statusEl.classList.toggle('error', isError);
+  }
+
+  function applyRegroupAll(value) {
+    regroupAll = value === true;
+    if (regroupToggle) {
+      regroupToggle.setAttribute('aria-checked', String(regroupAll));
+      regroupToggle.classList.toggle('is-on', regroupAll);
+    }
+    if (regroupState) regroupState.textContent = regroupAll ? 'On' : 'Off';
+    if (regroupDetail) regroupDetail.textContent = regroupAll ? 'Rebuild all groups' : 'Only ungrouped tabs';
   }
 
   function applyGroupingState(state = {}) {
@@ -123,9 +148,14 @@ function initPopup() {
 
   async function triggerAction(action) {
     buttons.forEach(b => b.disabled = true);
+    if (regroupToggle) regroupToggle.disabled = true;
     setStatus('Working…');
     try {
-      const response = await chrome.runtime.sendMessage({ action });
+      const request = { action };
+      if (action === 'ARRANGE_BY_DATE' || action === 'ARRANGE_BY_WEBSITE') {
+        request.regroupAll = regroupAll;
+      }
+      const response = await chrome.runtime.sendMessage(request);
       if (response?.status === 'error') {
         setStatus(response.error || 'Something went wrong.', true);
       } else if (response === undefined) {
@@ -139,12 +169,29 @@ function initPopup() {
       setStatus(err?.message || 'Something went wrong.', true);
     } finally {
       buttons.forEach(b => b.disabled = false);
+      if (regroupToggle) regroupToggle.disabled = false;
     }
   }
 
   for (const [id, action] of Object.entries(ACTIONS)) {
     document.getElementById(id)?.addEventListener('click', () => triggerAction(action));
   }
+
+  regroupToggle?.addEventListener('click', async () => {
+    const previous = regroupAll;
+    const next = !regroupAll;
+    applyRegroupAll(next);
+    try {
+      await chrome.storage.sync.set({ regroupAll: next });
+      setStatus(next
+        ? 'Regroup all is On. Date/Website will rebuild existing non-pinned groups.'
+        : 'Regroup all is Off. Date/Website will touch only ungrouped tabs.');
+    } catch (err) {
+      applyRegroupAll(previous);
+      console.error('Failed to save regroupAll:', err);
+      setStatus(err?.message || 'Failed to save Regroup all.', true);
+    }
+  });
 
   // Preview: show duplicate/idle counts when the popup opens.
   chrome.runtime.sendMessage({ action: 'PREVIEW' }).then((response) => {
@@ -155,6 +202,14 @@ function initPopup() {
 
   // Active grouping state is independent of the preview status line.
   refreshGroupingState();
+
+  // Regroup all is a saved preference used by both popup and keyboard actions.
+  chrome.storage.sync.get('regroupAll').then(({ regroupAll: savedRegroupAll = false }) => {
+    applyRegroupAll(savedRegroupAll === true);
+  }).catch((err) => {
+    console.error('Failed to read regroupAll:', err);
+    applyRegroupAll(false);
+  });
 
   // View Saved Sessions opens the dashboard in a new tab (no background round-trip).
   document.getElementById('btn-view-sessions')?.addEventListener('click', () => {
