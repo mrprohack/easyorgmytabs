@@ -38,5 +38,7 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.62.0
           npx playwright install --with-deps chromium
 
-      - name: Run Chromium smart-regroup E2E
-        run: node tests/e2e/regroup.e2e.js
+      - name: Run Chromium extension E2E
+        run: |
+          node tests/e2e/regroup.e2e.js
+          node tests/e2e/session-dashboard.e2e.js
