@@ -98,7 +98,7 @@ async function main() {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
 
-    // A fresh browser profile should receive the four manifest suggestions.
+    // A fresh browser profile should receive four conflict-free manifest suggestions.
     // The popup must then render Chrome's active values rather than hard-coded text.
     const registeredShortcuts = await popup.evaluate(async () => {
       const commands = await chrome.commands.getAll();
@@ -106,8 +106,8 @@ async function main() {
     });
     console.log(`Registered shortcut matrix: ${JSON.stringify(registeredShortcuts)}`);
     assert.strictEqual(registeredShortcuts.ARRANGE_BY_DATE, 'Alt+Shift+D');
-    assert.strictEqual(registeredShortcuts.ARRANGE_BY_WEBSITE, 'Alt+Shift+W');
-    assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+X');
+    assert.strictEqual(registeredShortcuts.ARRANGE_BY_WEBSITE, 'Alt+Shift+G');
+    assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+C');
     assert.strictEqual(registeredShortcuts.VIEW_SESSIONS, 'Alt+Shift+S');
     await popup.waitForFunction(() => document.querySelector('#btn-date .shortcut')?.textContent === 'Alt+Shift+D');
     assert.strictEqual(await popup.locator('#btn-website .shortcut').textContent(), registeredShortcuts.ARRANGE_BY_WEBSITE);
