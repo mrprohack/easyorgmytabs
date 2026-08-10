@@ -8,6 +8,13 @@ const ACTIONS = {
   'btn-session': 'SAVE_SESSION'
 };
 
+const SHORTCUT_BUTTONS = {
+  ARRANGE_BY_DATE: 'btn-date',
+  ARRANGE_BY_WEBSITE: 'btn-website',
+  CLOSE_DUPLICATES: 'btn-dedupe',
+  VIEW_SESSIONS: 'btn-view-sessions'
+};
+
 const ORGANIZE_ACTIONS = new Set(['ARRANGE_BY_DATE', 'ARRANGE_BY_WEBSITE', 'UNGROUP_ALL']);
 
 // [singular, plural, nothing-happened]
@@ -91,6 +98,8 @@ function initPopup() {
   const regroupToggle = document.getElementById('regroup-all-toggle');
   const regroupDetail = document.getElementById('regroup-all-detail');
   const regroupState = document.getElementById('regroup-all-state');
+  const shortcutWarning = document.getElementById('shortcut-warning');
+  const shortcutsSettingsBtn = document.getElementById('btn-shortcuts-settings');
   let regroupAll = false;
 
   if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') {
@@ -146,6 +155,40 @@ function initPopup() {
     }
   }
 
+  async function refreshShortcutState() {
+    if (typeof chrome.commands?.getAll !== 'function') return;
+
+    try {
+      const registered = await chrome.commands.getAll();
+      const shortcuts = new Map((registered || []).map(command => [command.name, command.shortcut || '']));
+      let missing = 0;
+
+      for (const [command, buttonId] of Object.entries(SHORTCUT_BUTTONS)) {
+        const button = document.getElementById(buttonId);
+        const chip = button?.querySelector('.shortcut');
+        if (!button || !chip) continue;
+
+        const shortcut = shortcuts.get(command) || '';
+        const unassigned = shortcut.length === 0;
+        chip.textContent = shortcut || 'Not assigned';
+        button.classList.toggle('shortcut-unassigned', unassigned);
+        button.title = unassigned
+          ? 'Keyboard shortcut is not assigned in Chrome'
+          : `Keyboard shortcut: ${shortcut}`;
+        if (unassigned) missing++;
+      }
+
+      if (shortcutWarning) {
+        shortcutWarning.hidden = missing === 0;
+        shortcutWarning.textContent = missing === 0
+          ? ''
+          : `${missing} keyboard ${popupUnit(missing, 'shortcut is', 'shortcuts are')} not assigned in Chrome.`;
+      }
+    } catch (err) {
+      console.error('Failed to read keyboard shortcuts:', err);
+    }
+  }
+
   async function triggerAction(action) {
     buttons.forEach(b => b.disabled = true);
     if (regroupToggle) regroupToggle.disabled = true;
@@ -193,6 +236,16 @@ function initPopup() {
     }
   });
 
+  shortcutsSettingsBtn?.addEventListener('click', async () => {
+    try {
+      await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+      window.close();
+    } catch (err) {
+      console.error('Failed to open Chrome keyboard shortcut settings:', err);
+      setStatus('Open chrome://extensions/shortcuts in Chrome to assign or change shortcuts.', true);
+    }
+  });
+
   // Preview: show duplicate/idle counts when the popup opens.
   chrome.runtime.sendMessage({ action: 'PREVIEW' }).then((response) => {
     if (response?.status === 'done' && response.count && typeof response.count === 'object') {
@@ -202,6 +255,9 @@ function initPopup() {
 
   // Active grouping state is independent of the preview status line.
   refreshGroupingState();
+
+  // Show Chrome's active bindings instead of assuming manifest suggestions won.
+  refreshShortcutState();
 
   // Regroup all is a saved preference used by both popup and keyboard actions.
   chrome.storage.sync.get('regroupAll').then(({ regroupAll: savedRegroupAll = false }) => {
