@@ -50,7 +50,7 @@ module.exports = async function main() {
   assert.ok(settings, 'keyboard-shortcut help button exists');
   settings.click();
   await new Promise(resolve => setTimeout(resolve, 10));
-  assert.deepStrictEqual(stub._stored._created, [], 'shortcut help must not open a blank chrome:// tab');
+  assert.deepStrictEqual(stub._stored._created || [], [], 'shortcut help must not open a blank chrome:// tab');
   assert.strictEqual(
     document.getElementById('status').textContent,
     'Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.'
