@@ -65,6 +65,11 @@ async function main() {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
 
+    // Chrome action popups are capped at 600px high. Keep the natural content
+    // below that so the real toolbar popup does not need vertical scrolling.
+    const popupHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
+    assert.ok(popupHeight <= 600, `popup content is ${popupHeight}px high; keep it at or below 600px`);
+
     const manualGroupId = await popup.evaluate(async () => {
       const tabs = await chrome.tabs.query({ currentWindow: true });
       const manual = tabs.find(tab => tab.url?.includes('/manual'));
@@ -118,7 +123,7 @@ async function main() {
     assert.strictEqual(betaAfterUngroup.groupId, -1, 'beta owned group is removed');
     assert.strictEqual(await popup.locator('#organize-mode').textContent(), 'Not organized');
 
-    console.log('Chromium E2E passed: Date -> Website -> Ungroup, manual group preserved');
+    console.log(`Chromium E2E passed: Date -> Website -> Ungroup, manual group preserved; popup ${popupHeight}px high`);
   } finally {
     if (context) await context.close();
     await new Promise(resolve => server.close(resolve));
