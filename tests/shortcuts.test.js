@@ -47,8 +47,12 @@ module.exports = async function main() {
   assert.match(warning.textContent, /1 keyboard shortcut is not assigned in Chrome/i);
 
   const settings = document.getElementById('btn-shortcuts-settings');
-  assert.ok(settings, 'keyboard-shortcut settings button exists');
+  assert.ok(settings, 'keyboard-shortcut help button exists');
   settings.click();
   await new Promise(resolve => setTimeout(resolve, 10));
-  assert.deepStrictEqual(stub._stored._created, ['chrome://extensions/shortcuts']);
+  assert.deepStrictEqual(stub._stored._created, [], 'shortcut help must not open a blank chrome:// tab');
+  assert.strictEqual(
+    document.getElementById('status').textContent,
+    'Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.'
+  );
 };
