@@ -28,7 +28,7 @@ A Chrome extension (Manifest V3) that organizes messy browser tabs into clean, c
 | Alt+Shift+K | Close Duplicates |
 | Alt+Shift+S | View Saved Sessions |
 
-The popup reads Chrome's active command bindings instead of assuming the manifest suggestion was accepted. If Chrome leaves a command unassigned or you remap it, the chip shows the real value. Use **Keyboard shortcuts** in the popup to open Chrome's shortcut manager when a binding needs repair.
+The popup reads Chrome's active command bindings instead of assuming the manifest suggestion was accepted. If Chrome leaves a command unassigned or you remap it, the chip shows the real value. Use **Keyboard shortcuts** in the popup to display the exact `chrome://extensions/shortcuts` address when a binding needs repair.
 
 ## Installation
 
@@ -45,7 +45,7 @@ The popup reads Chrome's active command bindings instead of assuming the manifes
 - Turn **Regroup all** On when you want the selected Date/Website mode to replace all non-pinned grouping in the current window.
 - Use **Ungroup all** to dissolve all non-pinned groups in the current window without relying on extension ownership history.
 - The popup shows the saved On/Off state and reports what was grouped, regrouped, preserved, or ungrouped.
-- The popup also shows Chrome's active keyboard shortcuts; an unassigned command is labeled **Not assigned** instead of showing a shortcut that does not work.
+- The popup also shows Chrome's active keyboard shortcuts; an unassigned command is labeled **Not assigned** instead of showing a shortcut that does not work. Use **Keyboard shortcuts** to see the Chrome shortcut-manager address without opening a blank privileged tab.
 - Set the sleep threshold with **Sleep tabs idle over ... hours**.
 - Open **Saved Sessions** to see live session/tab totals. Search filters both tab titles and URLs; use **Clear** to return to all sessions.
 - Saved-session cards use two columns on wider screens and one column on narrower screens. Each tab shows its title and hostname, with a compact remove control.
@@ -57,7 +57,7 @@ The popup reads Chrome's active command bindings instead of assuming the manifes
 - **Explicit regroup policy** - `regroupAll` is stored in `chrome.storage.sync` and defaults to `false`. Off preserves all existing groups; On explicitly allows rebuilding all non-pinned groups in the current window. Keyboard Date/Website commands read the same saved preference.
 - **Owned-group registry** - group IDs created by Tab Organizer are still stored temporarily in `chrome.storage.session` so the popup can derive active-mode state. Mutation safety no longer depends on that registry: explicit Regroup all/Ungroup all behavior is authoritative.
 - **logic.js** - pure helpers for URL filtering, dedupe keys, date buckets, session filtering, sleep-hour clamping, and bounded concurrency.
-- **popup.html / popup.js / popup.css** - compact popup UI with the Regroup all switch, Date/Website controls, Ungroup all, active-mode state, tools, sessions, live `chrome.commands.getAll()` shortcut chips, and a shortcut-manager recovery control.
+- **popup.html / popup.js / popup.css** - compact popup UI with the Regroup all switch, Date/Website controls, Ungroup all, active-mode state, tools, sessions, live `chrome.commands.getAll()` shortcut chips, and reliable shortcut-repair guidance.
 - **session.html / session.js** - responsive saved-sessions dashboard with semantic session cards, live totals/search context, dense tab rows, accessible action hierarchy, and background-message mutations. `chrome.storage.onChanged` keeps open dashboards synchronized.
 - **styles.css** - shared base styles plus dashboard-scoped responsive presentation. The dashboard is two-column on desktop, one-column on narrow screens, and constrains long tab text to avoid horizontal overflow.
 - **Storage** - sessions use `chrome.storage.local`; `sleepHours` and `regroupAll` use `chrome.storage.sync`; temporary group-mode ownership metadata uses `chrome.storage.session`.
@@ -107,6 +107,7 @@ The popup/regroup test verifies:
 - Ungroup all removes extension-created and unknown/manual groups.
 - pinned tabs remain excluded.
 - shortcut chips do not overlap their action labels using real DOM bounding boxes.
+- shortcut-repair guidance keeps the popup usable instead of opening a blank privileged tab.
 - popup natural height remains at or below 600px.
 
 The saved-sessions dashboard test verifies:
