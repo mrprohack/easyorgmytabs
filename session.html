@@ -1,25 +1,45 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Saved Sessions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saved Sessions · Tab Organizer</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dashboard">
-  <div class="container">
-    <div class="header">
-      <img src="icon.svg" alt="Logo">
-      <h1>Saved Sessions</h1>
-    </div>
+  <main class="container dashboard-main">
+    <header class="dashboard-hero">
+      <div class="dashboard-brand">
+        <img src="icon.svg" alt="" aria-hidden="true">
+        <div class="dashboard-title-group">
+          <p class="dashboard-eyebrow">Tab Organizer</p>
+          <h1>Saved Sessions</h1>
+          <p class="dashboard-subtitle">Find a saved tab fast, restore a workspace, or tidy sessions without losing context.</p>
+        </div>
+      </div>
 
-    <div class="toolbar">
-      <input id="search" class="input" type="search" placeholder="Search saved tabs…" autocomplete="off">
-    </div>
+      <div class="dashboard-stats" aria-label="Saved sessions summary">
+        <span id="session-count" class="summary-chip">0 sessions</span>
+        <span id="tab-count" class="summary-chip">0 tabs</span>
+      </div>
+    </header>
 
-    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <section class="dashboard-toolbar" aria-label="Search saved sessions">
+      <div class="search-heading-row">
+        <label for="search" class="search-label">Search saved tabs</label>
+        <p id="result-summary" class="result-summary">0 sessions · 0 tabs</p>
+      </div>
+      <div class="search-control">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/></svg>
+        <input id="search" class="input" type="search" placeholder="Search saved tabs…" autocomplete="off" aria-controls="sessions-container" aria-describedby="result-summary">
+        <button id="clear-search" class="clear-search-btn" type="button" aria-label="Clear search" hidden>Clear</button>
+      </div>
+    </section>
 
-    <div id="sessions-container"></div>
-  </div>
+    <p id="status" class="status dashboard-status" role="status" aria-live="polite"></p>
+
+    <section id="sessions-container" class="sessions-grid" aria-label="Saved sessions"></section>
+  </main>
   <script src="error-report.js"></script>
   <script src="logic.js"></script>
   <script src="session.js"></script>
