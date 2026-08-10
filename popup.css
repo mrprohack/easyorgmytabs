@@ -301,6 +301,12 @@ body.popup {
   white-space: nowrap;
 }
 
+.popup .shortcut-unassigned .shortcut {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .popup .organize-btn .shortcut {
   grid-column: 2;
   grid-row: 2;
@@ -410,6 +416,44 @@ body.popup {
   font-size: 6.5px;
 }
 
+.shortcut-health {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 0 2px;
+}
+
+.shortcut-warning {
+  flex: 1;
+  margin: 0;
+  color: #c2410c;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.shortcut-settings-btn {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 4px 7px;
+  border: 1px solid #dbe1eb;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #64748b;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shortcut-settings-btn:hover {
+  border-color: #a5b4fc;
+  color: #4338ca;
+}
+
 .popup .status {
   width: 100%;
   box-sizing: border-box;
@@ -432,7 +476,8 @@ body.popup {
 
 .popup .btn:focus-visible,
 .popup .input:focus-visible,
-.toggle-switch:focus-visible {
+.toggle-switch:focus-visible,
+.shortcut-settings-btn:focus-visible {
   outline: 2px solid #818cf8;
   outline-offset: 2px;
 }

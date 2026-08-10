@@ -98,6 +98,23 @@ async function main() {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
 
+    // A fresh browser profile should receive four conflict-free manifest suggestions.
+    // The popup must then render Chrome's active values rather than hard-coded text.
+    const registeredShortcuts = await popup.evaluate(async () => {
+      const commands = await chrome.commands.getAll();
+      return Object.fromEntries(commands.map(command => [command.name, command.shortcut || '']));
+    });
+    console.log(`Registered shortcut matrix: ${JSON.stringify(registeredShortcuts)}`);
+    assert.strictEqual(registeredShortcuts.ARRANGE_BY_DATE, 'Alt+Shift+D');
+    assert.strictEqual(registeredShortcuts.ARRANGE_BY_WEBSITE, 'Alt+Shift+G');
+    assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+K');
+    assert.strictEqual(registeredShortcuts.VIEW_SESSIONS, 'Alt+Shift+S');
+    await popup.waitForFunction(() => document.querySelector('#btn-date .shortcut')?.textContent === 'Alt+Shift+D');
+    assert.strictEqual(await popup.locator('#btn-website .shortcut').textContent(), registeredShortcuts.ARRANGE_BY_WEBSITE);
+    assert.strictEqual(await popup.locator('#btn-dedupe .shortcut').textContent(), registeredShortcuts.CLOSE_DUPLICATES);
+    assert.strictEqual(await popup.locator('#btn-view-sessions .shortcut').textContent(), registeredShortcuts.VIEW_SESSIONS);
+    assert.strictEqual(await popup.locator('#shortcut-warning').isHidden(), true, 'fresh-profile shortcuts are all assigned');
+
     // Chrome action popups are capped at 600px high. Keep the natural content
     // below that so the real toolbar popup does not need vertical scrolling.
     const popupHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
@@ -228,7 +245,18 @@ async function main() {
     const finalHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
     assert.ok(finalHeight <= 600, `final popup content is ${finalHeight}px high; keep it at or below 600px`);
 
-    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all (including unknown manual group); shortcuts clear; popup ${finalHeight}px high`);
+    // Chrome's shortcut manager is a privileged chrome:// page. The extension
+    // should keep the popup open and show the exact address rather than opening
+    // a blank tab when direct navigation is rejected by Chromium.
+    const pageCountBeforeHelp = context.pages().length;
+    await popup.locator('#btn-shortcuts-settings').click();
+    assert.strictEqual(context.pages().length, pageCountBeforeHelp, 'shortcut help does not open a blank tab');
+    assert.strictEqual(
+      await popup.locator('#status').textContent(),
+      'Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.'
+    );
+
+    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; active shortcuts verified; popup ${finalHeight}px high`);
   } finally {
     if (context) await context.close();
     await new Promise(resolve => server.close(resolve));
