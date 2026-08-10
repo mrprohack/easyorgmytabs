@@ -104,6 +104,7 @@ async function main() {
       const commands = await chrome.commands.getAll();
       return Object.fromEntries(commands.map(command => [command.name, command.shortcut || '']));
     });
+    console.log(`Registered shortcut matrix: ${JSON.stringify(registeredShortcuts)}`);
     assert.strictEqual(registeredShortcuts.ARRANGE_BY_DATE, 'Alt+Shift+D');
     assert.strictEqual(registeredShortcuts.ARRANGE_BY_WEBSITE, 'Alt+Shift+W');
     assert.strictEqual(registeredShortcuts.CLOSE_DUPLICATES, 'Alt+Shift+X');
