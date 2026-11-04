@@ -148,4 +148,24 @@ module.exports = async function main() {
   searchField.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   assert.strictEqual(searchField.value, '');
   assert.strictEqual(document.getElementById('clear-search').hidden, true);
+
+  // corrupt storage: bad entries must not blank the dashboard, and the remaining rows must keep
+  // the indices the background uses for SESSION_REMOVE_TAB
+  const sent = [];
+  ({ document, stub } = await loadDashboard([
+    { date: iso(1) },                                                                    // no tabs at all
+    { date: iso(2), tabs: tabs('https://ok.com/') },                                     // healthy
+    null,                                                                                // not an object
+    { date: iso(3), tabs: 'nope' },                                                      // tabs is not an array
+    { date: iso(4), tabs: [null, { title: 'Second', url: 'https://second.com/' }] }      // a null tab entry
+  ], (s) => { s.runtime.sendMessage = async (msg) => { sent.push(msg); return { status: 'done', count: 1 }; }; }));
+  assert.strictEqual(document.getElementById('status').textContent, '', 'corrupt entries must not surface as an error');
+  cards = [...document.querySelectorAll('article.session')];
+  assert.strictEqual(cards.length, 4, 'the non-object entry is skipped; every object entry still renders');
+  assert.strictEqual(document.getElementById('session-count').textContent, '4 sessions');
+  assert.strictEqual(cards[1].querySelector('.link').textContent, 'Tab 1', 'the healthy session is unaffected');
+  assert.strictEqual(cards[3].querySelectorAll('.link-row').length, 2, 'a null tab keeps its row so indices stay aligned');
+  cards[3].querySelectorAll('.delete-link-btn')[1].click();
+  await tick();
+  assert.strictEqual(sent.find(m => m.action === 'SESSION_REMOVE_TAB').index, 1, 'removal targets the stored index, not a filtered one');
 };

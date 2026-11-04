@@ -117,15 +117,22 @@ async function main() {
 
     // Keyboard order follows action hierarchy: search -> primary restore, with a
     // visible focus outline supplied by :focus-visible.
+    const ringOf = (el) => { const s = getComputedStyle(el); return { style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; };
+    const sharedRing = { style: 'solid', width: '2px', color: 'rgb(99, 102, 241)' }; // the shared --accent focus ring, fully opaque
     await dashboard.locator('#search').focus();
+    // The search input draws no outline of its own, so its control carries the shared ring.
+    assert.deepStrictEqual(await dashboard.locator('.search-control').evaluate(ringOf), sharedRing, 'focused search shows the shared focus ring');
     await dashboard.keyboard.press('Tab');
     const focused = await dashboard.evaluate(() => ({
       className: document.activeElement?.className || '',
       text: document.activeElement?.textContent || ''
     }));
     assert.match(focused.className, /btn-session-primary/, `primary restore should follow search in keyboard order: ${JSON.stringify(focused)}`);
-    const outlineStyle = await dashboard.locator('.btn-session-primary').first().evaluate(el => getComputedStyle(el).outlineStyle);
-    assert.notStrictEqual(outlineStyle, 'none', 'keyboard-focused primary action has a visible focus outline');
+    // Read straight after Tab: the ring must be the opaque accent at once, not a translucent or animating outline.
+    assert.deepStrictEqual(await dashboard.locator('.btn-session-primary').first().evaluate(ringOf), sharedRing, 'keyboard-focused primary action shows the shared focus ring');
+    // Text fields too: the shared .input rule must not switch the ring off.
+    await cards.nth(0).locator('.add-link-form input').focus();
+    assert.deepStrictEqual(await cards.nth(0).locator('.add-link-form input').evaluate(ringOf), sharedRing, 'focused URL field shows the shared focus ring');
 
     // Restore here opens only the linkable tab from the first session.
     const newPagePromise = context.waitForEvent('page');
@@ -163,6 +170,12 @@ async function main() {
     const longLink = dashboard.locator('.link').filter({ hasText: 'A very long saved tab title' }).first();
     const longMetrics = await longLink.evaluate(el => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
     assert.ok(longMetrics.scrollWidth >= longMetrics.clientWidth, 'long title is constrained inside its row');
+
+    // A long hostname also reaches the status line ("Added <host> to this session."); it must wrap, not widen the page.
+    await cards.nth(0).locator('.add-link-form input').fill(`http://${'a'.repeat(50)}.${'b'.repeat(50)}.example/x`);
+    await cards.nth(0).locator('.add-link-btn').click();
+    await dashboard.waitForFunction(() => /^Added /.test(document.getElementById('status')?.textContent || ''));
+    await noHorizontalOverflow(dashboard, '360px dashboard with a long hostname in the status line');
     await noHorizontalOverflow(dashboard, 'dashboard after long-title measurement');
 
     console.log('Chromium session dashboard E2E passed: responsive grid, search, keyboard hierarchy, restore, delete, and overflow safety');

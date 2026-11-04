@@ -305,15 +305,31 @@ searchInput?.addEventListener('keydown', (event) => {
   }
 });
 
+// Storage can hold entries that a bug or an older build wrote badly. Keep the dashboard usable:
+// skip entries that are not objects, treat a missing or invalid `tabs` as empty, and replace a
+// non-object tab with an empty placeholder (not a filter) so every other tab keeps the index the
+// background expects for SESSION_REMOVE_TAB.
+function normalizeSessions(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      ...item,
+      tabs: Array.isArray(item.tabs)
+        ? item.tabs.map(tab => (tab && typeof tab === 'object' ? tab : { title: '', url: '' }))
+        : []
+    }));
+}
+
 async function loadSessions() {
   const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
-  sessions = Array.isArray(savedSessions) ? savedSessions : [];
+  sessions = normalizeSessions(savedSessions);
   render();
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.savedSessions) {
-    sessions = Array.isArray(changes.savedSessions.newValue) ? changes.savedSessions.newValue : [];
+    sessions = normalizeSessions(changes.savedSessions.newValue);
     render();
   }
 });

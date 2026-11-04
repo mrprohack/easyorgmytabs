@@ -30,6 +30,7 @@
 - **Popup preview:** `PREVIEW` returns `{ duplicates, idle }` counts without mutating anything. The popup shows them in the two badges (`–` until a well-formed reply arrives; failures are silent) and re-requests them after Close Duplicates, Sleep, Undo Close and a threshold change.
 - **Save Session:** filters non-pinned restorable tabs, unshifts into `savedSessions` history, and opens the dashboard. **Tabs are never closed by saving.**
 - **Sleep rules:** never sleeps pinned tabs, audible tabs, or the active tab.
+- **Dashboard data hygiene:** `normalizeSessions` (session.js) skips non-object sessions, treats a missing/invalid `tabs` as empty, and swaps a non-object tab for an empty placeholder. It must never *filter* tabs: the dashboard sends `SESSION_REMOVE_TAB` with the tab's array index, so removing entries would make a removal hit the wrong stored tab.
 
 
 ## Test Suite
@@ -52,7 +53,7 @@
 - **Floors (enforced by `tests/style.test.js` and the e2e font check):** no rendered text under 11px; no `!important` outside the `prefers-reduced-motion` block; every text/surface token pair at least 4.5:1; `#94a3b8` is decorative only, never a text colour.
 - **Popup layout:** 360px wide, at most 560px tall (Chrome caps popups at 600px; the e2e also checks a worst case with the warning banner and a three-line result). Primary actions are at least 36px high; the header Shortcuts link and the Regroup toggle are 30px. Three numbered sections with scope chips; keep the "This window" / "Any window" labels truthful. Dashboard targets are at least 32px.
 - **Status bar:** one shared `.status` component with neutral, `.is-success` and `.error` tones; set the tone only through `setStatus` (popup) / `setDashboardStatus` (dashboard) so the two classes stay mutually exclusive. It collapses when empty in the popup.
-- **Look:** page gradient `--page-light` to `--page-dark`; frosted cards (`--surface-glass` + `backdrop-filter: blur(12px)`); white buttons with a subtle shadow and an indigo hover lift; inline SVG stroke icons (`stroke-width: 2`); one zero-specificity focus ring (`:where(button, input, a):focus-visible`).
+- **Look:** page gradient `--page-light` to `--page-dark`; frosted cards (`--surface-glass` + `backdrop-filter: blur(12px)`); white buttons with a subtle shadow and an indigo hover lift; inline SVG stroke icons (`stroke-width: 2`); one shared focus ring (`:where(button, input, a):focus-visible`: 2px opaque `--accent` outline). Don't override it with translucent outlines (focus indicators need 3:1); the dashboard search input draws no outline, so `.search-control:focus-within` carries the same ring. `.status` uses `overflow-wrap: anywhere` so a hostname in a message never widens a page.
 
 ## Icons
 - `icon.svg`: 128-unit viewBox with `rx="28"` (21.875%). The popup `.brand img` (28px, 8px radius) and `.dashboard-brand img` (46px, 12px radius) approximate that curve — revisit them on any logo change.

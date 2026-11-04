@@ -126,6 +126,14 @@ async function main() {
     await assertShortcutLayout(popup);
     await assertMinFontSize(popup, 'popup');
 
+    // The sleep-threshold field shows the shared focus ring (the shared .input rule must not switch it off).
+    await popup.locator('#sleep-hours').focus();
+    assert.deepStrictEqual(
+      await popup.locator('#sleep-hours').evaluate(el => { const s = getComputedStyle(el); return { style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; }),
+      { style: 'solid', width: '2px', color: 'rgb(99, 102, 241)' },
+      'focused sleep-threshold field shows the shared focus ring'
+    );
+
     // Pinned tabs are never eligible for organization or ungroup-all behavior.
     await popup.evaluate(async (targetUrl) => {
       const tabs = await chrome.tabs.query({ currentWindow: true });
@@ -273,6 +281,16 @@ async function main() {
     });
     const worstHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
     assert.ok(worstHeight <= 600, `worst-case popup is ${worstHeight}px high; Chrome caps popups at 600px`);
+
+    // An unbroken hostname in a status message must wrap inside the bar, not overflow the 360px popup.
+    await popup.evaluate(() => {
+      document.getElementById('status').textContent = `Added ${'a'.repeat(60)}.${'b'.repeat(60)}.example to this session.`;
+    });
+    const statusFit = await popup.evaluate(() => {
+      const bar = document.getElementById('status');
+      return { scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth };
+    });
+    assert.ok(statusFit.scrollWidth <= statusFit.clientWidth, `a long unbroken status must wrap inside its bar: ${JSON.stringify(statusFit)}`);
 
     console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; active shortcuts verified; popup ${finalHeight}px high (worst case ${worstHeight}px)`);
   } finally {
