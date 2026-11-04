@@ -50,6 +50,18 @@ function stripReducedMotion(css) {
   return out + css.slice(last);
 }
 
+// Rules every stylesheet must follow: 11px type floor, no !important (except reduced-motion), no #94a3b8 text.
+function lintCss(fileName) {
+  const css = read(fileName).replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [, value] of css.matchAll(/font-size\s*:\s*([^;}]+)/g)) {
+    for (const [, px] of value.matchAll(/(\d+(?:\.\d+)?)px/g)) {
+      assert.ok(parseFloat(px) >= 11, `${fileName}: font-size "${value.trim()}" contains ${px}px, below the 11px floor`);
+    }
+  }
+  assert.ok(!/!important/.test(stripReducedMotion(css)), `${fileName}: !important is only allowed inside @media (prefers-reduced-motion: reduce)`);
+  assert.ok(!/(^|[;{\s])color\s*:\s*#94a3b8/i.test(css), `${fileName}: #94a3b8 must not be used as a text colour`);
+}
+
 const REQUIRED = ['--fs-chip', '--fs-sm', '--fs-md', '--fs-lg', '--fs-xl', '--fs-display', '--text', '--text-2', '--text-muted',
   '--accent', '--accent-strong', '--accent-soft', '--on-accent', '--surface', '--surface-glass', '--border', '--page-light', '--page-dark',
   '--success', '--success-soft', '--danger', '--danger-soft', '--warn', '--warn-soft', '--sp-1', '--sp-2', '--sp-3', '--sp-4', '--sp-5',
@@ -83,4 +95,7 @@ module.exports = async function main() {
     const ratio = contrastRatio(tokens[fg], tokens[bg]);
     assert.ok(ratio >= 4.5, `${fg} (${tokens[fg]}) on ${bg} (${tokens[bg]}) is ${ratio.toFixed(2)}:1, needs 4.5:1`);
   }
+
+  // stylesheet lint
+  lintCss('popup.css');
 };
