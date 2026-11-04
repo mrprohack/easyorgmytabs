@@ -6,6 +6,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
+const { assertMinFontSize } = require('./helpers');
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -62,7 +63,9 @@ async function main() {
         date: '2026-08-08T12:00:00.000Z',
         tabs: [
           { title: longTitle, url: `http://localhost:${port}/beta` },
-          { title: 'Gamma workspace', url: `http://127.0.0.1:${port}/gamma` }
+          { title: 'Gamma workspace', url: `http://127.0.0.1:${port}/gamma` },
+          // A very long hostname must be clipped in the host summary, never widen the page.
+          { title: 'Long host', url: `http://${'a'.repeat(50)}.${'b'.repeat(50)}.localhost:${port}/x` }
         ]
       }
     ];
@@ -77,7 +80,7 @@ async function main() {
     await dashboard.waitForFunction(() => document.querySelectorAll('article.session').length === 2);
 
     assert.strictEqual(await dashboard.locator('#session-count').textContent(), '2 sessions');
-    assert.strictEqual(await dashboard.locator('#tab-count').textContent(), '4 tabs');
+    assert.strictEqual(await dashboard.locator('#tab-count').textContent(), '5 tabs');
     await noHorizontalOverflow(dashboard, 'desktop dashboard');
 
     const cards = dashboard.locator('article.session');
@@ -86,6 +89,21 @@ async function main() {
     assert.ok(firstBox && secondBox, 'desktop session cards have layout boxes');
     assert.ok(Math.abs(firstBox.y - secondBox.y) <= 2, `desktop cards should share a row: ${firstBox.y} vs ${secondBox.y}`);
     assert.ok(Math.abs(firstBox.x - secondBox.x) > 20, 'desktop cards occupy separate columns');
+
+    // Card identity: the newest card is marked, hosts are summarised on one clipped line.
+    assert.strictEqual((await cards.nth(0).locator('.session-badge').textContent()).trim(), 'Latest');
+    assert.strictEqual(await cards.nth(1).locator('.session-badge').count(), 0);
+    assert.strictEqual(await cards.nth(0).locator('.session-hosts').isVisible(), true);
+    const hostsMetrics = await cards.nth(1).locator('.session-hosts').evaluate(el => ({
+      textOverflow: getComputedStyle(el).textOverflow,
+      whiteSpace: getComputedStyle(el).whiteSpace,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth
+    }));
+    assert.strictEqual(hostsMetrics.textOverflow, 'ellipsis');
+    assert.strictEqual(hostsMetrics.whiteSpace, 'nowrap');
+    assert.ok(hostsMetrics.scrollWidth > hostsMetrics.clientWidth, `a long host list is clipped, not wrapped: ${JSON.stringify(hostsMetrics)}`);
+    await assertMinFontSize(dashboard, 'dashboard 1100');
 
     // Search filters through the real dashboard and Clear restores both cards.
     await dashboard.locator('#search').fill('Gamma workspace');
@@ -135,6 +153,7 @@ async function main() {
     await dashboard.setViewportSize({ width: 360, height: 780 });
     await dashboard.waitForTimeout(100);
     await noHorizontalOverflow(dashboard, '360px dashboard');
+    await assertMinFontSize(dashboard, 'dashboard 360');
 
     const mobileFirst = await cards.nth(0).boundingBox();
     const mobileSecond = await cards.nth(1).boundingBox();

@@ -98,4 +98,5 @@ module.exports = async function main() {
 
   // stylesheet lint
   lintCss('popup.css');
+  lintCss('styles.css');
 };
