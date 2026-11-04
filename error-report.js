@@ -6,6 +6,7 @@
     const status = document.getElementById('status');
     if (status) {
       status.textContent = message;
+      status.classList.remove('is-success');
       status.classList.add('error');
     }
   }

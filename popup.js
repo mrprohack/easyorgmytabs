@@ -17,6 +17,9 @@ const SHORTCUT_BUTTONS = {
 
 const ORGANIZE_ACTIONS = new Set(['ARRANGE_BY_DATE', 'ARRANGE_BY_WEBSITE', 'UNGROUP_ALL']);
 
+// Actions that change what the duplicate/idle badges should show.
+const PREVIEW_ACTIONS = new Set(['CLOSE_DUPLICATES', 'SLEEP_INACTIVE', 'UNDO_CLOSE']);
+
 // [singular, plural, nothing-happened]
 const RESULT_TEXT = {
   ARRANGE_BY_DATE: ['group', 'groups', 'Nothing to arrange.'],
@@ -100,6 +103,8 @@ function initPopup() {
   const regroupState = document.getElementById('regroup-all-state');
   const shortcutWarning = document.getElementById('shortcut-warning');
   const shortcutsSettingsBtn = document.getElementById('btn-shortcuts-settings');
+  const duplicatesBadge = document.getElementById('badge-duplicates');
+  const idleBadge = document.getElementById('badge-idle');
   let regroupAll = false;
 
   if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') {
@@ -109,10 +114,26 @@ function initPopup() {
     return;
   }
 
-  function setStatus(text, isError = false) {
+  // tone: 'neutral' | 'success' | 'error'. The two tint classes are mutually exclusive.
+  function setStatus(text, tone = 'neutral') {
     if (!statusEl) return;
     statusEl.textContent = text;
-    statusEl.classList.toggle('error', isError);
+    statusEl.classList.toggle('error', tone === 'error');
+    statusEl.classList.toggle('is-success', tone === 'success');
+  }
+
+  // Duplicate/idle badges. Anything but a well-formed reply leaves them as they were.
+  async function refreshPreview() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'PREVIEW' });
+      const counts = response?.status === 'done' ? response.count : null;
+      if (!counts || typeof counts !== 'object') return;
+      if (!Number.isFinite(counts.duplicates) || !Number.isFinite(counts.idle)) return;
+      if (duplicatesBadge) duplicatesBadge.textContent = String(counts.duplicates);
+      if (idleBadge) idleBadge.textContent = String(counts.idle);
+    } catch (err) {
+      // Badges are informational; a failed preview must never surface as an error.
+    }
   }
 
   function applyRegroupAll(value) {
@@ -192,6 +213,7 @@ function initPopup() {
   async function triggerAction(action) {
     buttons.forEach(b => b.disabled = true);
     if (regroupToggle) regroupToggle.disabled = true;
+    document.body.setAttribute('aria-busy', 'true');
     setStatus('Working…');
     try {
       const request = { action };
@@ -200,19 +222,22 @@ function initPopup() {
       }
       const response = await chrome.runtime.sendMessage(request);
       if (response?.status === 'error') {
-        setStatus(response.error || 'Something went wrong.', true);
+        setStatus(response.error || 'Something went wrong.', 'error');
       } else if (response === undefined) {
-        setStatus('Background not responding. Reload the extension.', true);
+        setStatus('Background not responding. Reload the extension.', 'error');
       } else {
-        setStatus(formatActionResponse(action, response));
+        const changed = response?.result?.changed ?? response?.count ?? 0;
+        setStatus(formatActionResponse(action, response), changed > 0 ? 'success' : 'neutral');
         if (ORGANIZE_ACTIONS.has(action)) await refreshGroupingState();
+        if (PREVIEW_ACTIONS.has(action)) refreshPreview();
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      setStatus(err?.message || 'Something went wrong.', true);
+      setStatus(err?.message || 'Something went wrong.', 'error');
     } finally {
       buttons.forEach(b => b.disabled = false);
       if (regroupToggle) regroupToggle.disabled = false;
+      document.body.setAttribute('aria-busy', 'false');
     }
   }
 
@@ -232,7 +257,7 @@ function initPopup() {
     } catch (err) {
       applyRegroupAll(previous);
       console.error('Failed to save regroupAll:', err);
-      setStatus(err?.message || 'Failed to save Regroup all.', true);
+      setStatus(err?.message || 'Failed to save Regroup all.', 'error');
     }
   });
 
@@ -244,12 +269,8 @@ function initPopup() {
     setStatus('Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.');
   });
 
-  // Preview: show duplicate/idle counts when the popup opens.
-  chrome.runtime.sendMessage({ action: 'PREVIEW' }).then((response) => {
-    if (response?.status === 'done' && response.count && typeof response.count === 'object') {
-      setStatus(`${response.count.duplicates} duplicates · ${response.count.idle} idle tabs`);
-    }
-  }).catch(() => {});
+  // Preview: fill the duplicate/idle badges when the popup opens.
+  refreshPreview();
 
   // Active grouping state is independent of the preview status line.
   refreshGroupingState();
@@ -278,18 +299,19 @@ function initPopup() {
     sleepHoursInput.value = sleepHours;
   }).catch((err) => {
     console.error('Failed to read sleepHours:', err);
-    setStatus(err?.message || 'Failed to read the sleep threshold.', true);
+    setStatus(err?.message || 'Failed to read the sleep threshold.', 'error');
   });
 
   sleepHoursInput.addEventListener('change', async () => {
     if (typeof clampSleepHours !== 'function') {
-      setStatus('logic.js failed to load - reload the extension.', true);
+      setStatus('logic.js failed to load - reload the extension.', 'error');
       return;
     }
     const hours = clampSleepHours(sleepHoursInput.value);
     sleepHoursInput.value = hours;
     await chrome.storage.sync.set({ sleepHours: hours });
     setStatus(`Sleeping tabs idle over ${hours}h.`);
+    refreshPreview();
   });
 }
 
