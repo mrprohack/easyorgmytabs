@@ -86,7 +86,10 @@ body.popup {
   background: var(--warn-soft);
   color: var(--warn);
   font-size: var(--fs-sm);
-  font-weight: 600;
+  /* 500, not 600: fonts with only Regular/Bold faces (DejaVu Sans, common on Linux)
+     render 600 as Bold, which wraps this banner to two lines and pushes the popup
+     past Chrome's 600px cap. */
+  font-weight: 500;
   line-height: 1.3;
 }
 
