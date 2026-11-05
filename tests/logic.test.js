@@ -134,4 +134,40 @@ module.exports = async function main() {
   // runBatched: empty input resolves 0; bad limit throws
   assert.strictEqual(await L.runBatched([], 5, async () => {}), 0);
   assert.throws(() => L.runBatched([1], 0, async () => {}), RangeError);
+
+  // relativeTime: human wording for saved-session ages (fixed clock, English locale)
+  const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
+  const MIN = 60e3, HR = 36e5, DAY = 864e5;
+  const ago = (ms) => new Date(NOW - ms).toISOString();
+  assert.strictEqual(L.relativeTime(ago(30e3), NOW, 'en'), 'just now');
+  assert.strictEqual(L.relativeTime(new Date(NOW + 2 * MIN).toISOString(), NOW, 'en'), 'just now'); // clock skew
+  assert.strictEqual(L.relativeTime(ago(5 * MIN), NOW, 'en'), '5 minutes ago');
+  assert.strictEqual(L.relativeTime(ago(HR), NOW, 'en'), '1 hour ago');
+  assert.strictEqual(L.relativeTime(ago(2 * HR), NOW, 'en'), '2 hours ago');
+  assert.strictEqual(L.relativeTime(ago(26 * HR), NOW, 'en'), 'yesterday');
+  assert.strictEqual(L.relativeTime(ago(3 * DAY), NOW, 'en'), '3 days ago');
+  assert.strictEqual(L.relativeTime(ago(29 * DAY), NOW, 'en'), '29 days ago');
+  assert.strictEqual(L.relativeTime(ago(45 * DAY), NOW, 'en'), 'last month');
+  assert.strictEqual(L.relativeTime(ago(100 * DAY), NOW, 'en'), '3 months ago');
+  assert.strictEqual(L.relativeTime(ago(400 * DAY), NOW, 'en'), 'last year');
+  assert.strictEqual(L.relativeTime(ago(800 * DAY), NOW, 'en'), '2 years ago');
+  assert.strictEqual(L.relativeTime(NOW - 3 * DAY, NOW, 'en'), '3 days ago');           // number input
+  assert.strictEqual(L.relativeTime(new Date(NOW - 3 * DAY), NOW, 'en'), '3 days ago'); // Date input
+  assert.strictEqual(L.relativeTime('garbage', NOW, 'en'), '');
+  assert.strictEqual(L.relativeTime(undefined, NOW, 'en'), '');
+  assert.strictEqual(L.relativeTime(null, NOW, 'en'), '');   // null must not be read as the 1970 epoch
+  assert.strictEqual(L.relativeTime('', NOW, 'en'), '');
+
+  // hostSummary: distinct, www-stripped hosts of linkable tabs, capped with a remainder count
+  const tab = (url) => ({ url });
+  assert.deepStrictEqual(
+    L.hostSummary([tab('https://www.a.com/x'), tab('https://a.com/y'), tab('https://b.com'), tab('javascript:alert(1)')]),
+    { hosts: ['a.com', 'b.com'], more: 0 }
+  );
+  assert.deepStrictEqual(
+    L.hostSummary(['a', 'b', 'c', 'd', 'e'].map(h => tab(`https://${h}.com`))),
+    { hosts: ['a.com', 'b.com', 'c.com'], more: 2 }
+  );
+  assert.deepStrictEqual(L.hostSummary([]), { hosts: [], more: 0 });
+  assert.deepStrictEqual(L.hostSummary([tab(undefined)]), { hosts: [], more: 0 });
 };

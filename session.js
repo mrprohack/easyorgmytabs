@@ -58,10 +58,12 @@ function hostnameOf(pageUrl) {
   }
 }
 
-function setDashboardStatus(text, isError = false) {
+// tone: 'neutral' | 'success' | 'error'. The two tint classes are mutually exclusive.
+function setDashboardStatus(text, tone = 'neutral') {
   if (!statusEl) return;
   statusEl.textContent = text;
-  statusEl.classList.toggle('error', isError);
+  statusEl.classList.toggle('error', tone === 'error');
+  statusEl.classList.toggle('is-success', tone === 'success');
 }
 
 function updateDashboardSummary(visibleResults) {
@@ -123,7 +125,7 @@ function linkRow(session, tab) {
   remove.setAttribute('aria-label', `Remove ${displayTitle}`);
   remove.addEventListener('click', async () => {
     const index = session.tabs.indexOf(tab);
-    if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: sessionIdOf(session), index });
+    if (index > -1) await mutate('SESSION_REMOVE_TAB', { sessionId: sessionIdOf(session), index }, 'Removed tab.');
   });
 
   return el('div', { className: 'link-row' }, favicon, copy, remove);
@@ -151,7 +153,7 @@ function addLinkForm(session) {
       return;
     }
     const tab = { title: new URL(url).hostname, url };
-    await mutate('SESSION_ADD_TAB', { sessionId: sessionIdOf(session), tab });
+    await mutate('SESSION_ADD_TAB', { sessionId: sessionIdOf(session), tab }, `Added ${tab.title} to this session.`);
   });
 
   return form;
@@ -162,17 +164,31 @@ function sessionHeadingId(session) {
   return `session-heading-${safe || 'saved'}`;
 }
 
-function sessionCard(session, visibleTabs) {
+function sessionCard(session, visibleTabs, { isLatest = false } = {}) {
   const headingId = sessionHeadingId(session);
   const sessionDate = new Date(session.date).toLocaleDateString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
   const count = session.tabs.length;
 
+  // Unnamed sessions are told apart by age and by the sites they hold.
+  const age = relativeTime(session.date);
+  const metaText = `${count} ${plural(count, 'tab', 'tabs')}${age ? ` · ${age}` : ''}`;
+  const { hosts, more } = hostSummary(session.tabs);
+  const hostsLine = hosts.length
+    ? el('p', { className: 'session-hosts', textContent: hosts.join(' · ') + (more ? ` · +${more} more` : '') })
+    : null;
+
   const restore = el('button', { className: 'btn btn-session-primary', type: 'button' }, icon(ICONS.restore), el('span', { textContent: 'Restore in new window' }));
-  restore.addEventListener('click', () => {
+  restore.addEventListener('click', async () => {
     const urls = session.tabs.map(tab => tab.url).filter(isLinkable);
-    if (urls.length) chrome.windows.create({ url: urls });
+    if (!urls.length) return;
+    try {
+      await chrome.windows.create({ url: urls });
+      setDashboardStatus(`Opened ${urls.length} ${plural(urls.length, 'tab', 'tabs')} in a new window.`, 'success');
+    } catch (err) {
+      setDashboardStatus(err?.message || 'Could not open a new window.', 'error');
+    }
   });
 
   const restoreHere = el('button', { className: 'btn btn-session-secondary btn-restore-here', type: 'button' }, icon(ICONS.restore), el('span', { textContent: 'Restore here' }));
@@ -180,7 +196,7 @@ function sessionCard(session, visibleTabs) {
     const urls = session.tabs.map(tab => tab.url).filter(isLinkable);
     if (!urls.length) return;
     for (const url of urls) await chrome.tabs.create({ url });
-    setDashboardStatus(`Opened ${urls.length} ${plural(urls.length, 'tab', 'tabs')} in this window.`);
+    setDashboardStatus(`Opened ${urls.length} ${plural(urls.length, 'tab', 'tabs')} in this window.`, 'success');
   });
 
   const removeLabel = el('span', { textContent: 'Delete' });
@@ -202,7 +218,7 @@ function sessionCard(session, visibleTabs) {
       return;
     }
     clearTimeout(resetTimer);
-    await mutate('SESSION_DELETE', { sessionId: sessionIdOf(session) });
+    await mutate('SESSION_DELETE', { sessionId: sessionIdOf(session) }, 'Session deleted.');
   });
 
   const article = el('article', { className: 'session' },
@@ -210,8 +226,10 @@ function sessionCard(session, visibleTabs) {
       el('div', { className: 'session-heading-group' },
         el('p', { className: 'session-eyebrow', textContent: 'Saved workspace' }),
         el('h2', { id: headingId, textContent: sessionDate }),
-        el('p', { className: 'meta', textContent: `${count} ${plural(count, 'tab', 'tabs')}` })
-      )
+        el('p', { className: 'meta', textContent: metaText }),
+        hostsLine
+      ),
+      isLatest ? el('span', { className: 'session-badge', textContent: 'Latest' }) : null
     ),
     el('div', { className: 'session-actions' }, restore, restoreHere),
     el('div', { className: 'session-danger-zone' }, remove),
@@ -258,7 +276,8 @@ function render() {
   }
 
   for (const { session, tabs } of visible) {
-    container.append(sessionCard(session, tabs));
+    // The newest session (stored first) is marked, unless a search is narrowing the list.
+    container.append(sessionCard(session, tabs, { isLatest: query === '' && session === sessions[0] }));
   }
 }
 
@@ -268,30 +287,66 @@ searchInput?.addEventListener('input', () => {
 });
 clearSearchBtn?.addEventListener('click', clearSearch);
 
+function isTypingTarget(node) {
+  return Boolean(node) && (node.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(node.tagName));
+}
+
+// "/" jumps to search (never while typing in a field, never with a modifier); Esc clears it.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!searchInput || isTypingTarget(event.target)) return;
+  event.preventDefault();
+  searchInput.focus();
+});
+searchInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && searchInput.value) {
+    event.preventDefault();
+    clearSearch();
+  }
+});
+
+// Storage can hold entries that a bug or an older build wrote badly. Keep the dashboard usable:
+// skip entries that are not objects, treat a missing or invalid `tabs` as empty, and replace a
+// non-object tab with an empty placeholder (not a filter) so every other tab keeps the index the
+// background expects for SESSION_REMOVE_TAB.
+function normalizeSessions(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      ...item,
+      tabs: Array.isArray(item.tabs)
+        ? item.tabs.map(tab => (tab && typeof tab === 'object' ? tab : { title: '', url: '' }))
+        : []
+    }));
+}
+
 async function loadSessions() {
   const { savedSessions = [] } = await chrome.storage.local.get('savedSessions');
-  sessions = Array.isArray(savedSessions) ? savedSessions : [];
+  sessions = normalizeSessions(savedSessions);
   render();
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.savedSessions) {
-    sessions = Array.isArray(changes.savedSessions.newValue) ? changes.savedSessions.newValue : [];
+    sessions = normalizeSessions(changes.savedSessions.newValue);
     render();
   }
 });
 
-async function mutate(action, payload) {
+// Runs a background mutation, re-renders from storage, then confirms it in the status line.
+async function mutate(action, payload, successMessage) {
   setDashboardStatus('');
   try {
     const response = await chrome.runtime.sendMessage({ action, ...payload });
     if (response?.status === 'error') throw new Error(response.error || 'Mutation failed');
     await loadSessions();
+    if (successMessage) setDashboardStatus(successMessage, 'success');
   } catch (err) {
-    setDashboardStatus(err?.message || 'Something went wrong.', true);
+    setDashboardStatus(err?.message || 'Something went wrong.', 'error');
   }
 }
 
 loadSessions().catch((err) => {
-  setDashboardStatus(err?.message || 'Failed to load sessions.', true);
+  setDashboardStatus(err?.message || 'Failed to load sessions.', 'error');
 });

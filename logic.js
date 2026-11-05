@@ -89,6 +89,34 @@ function filterSessions(sessions, query) {
     .filter(entry => !q || entry.tabs.length > 0);
 }
 
+// "3 days ago" style age of a saved session. Returns '' when `date` is not a usable date
+// (null, undefined, '' and unparsable values), so callers can simply omit the label.
+function relativeTime(date, now = Date.now(), locale = undefined) {
+  if (date === null || date === undefined || date === '') return '';
+  const then = new Date(date).getTime();
+  if (!Number.isFinite(then)) return '';
+  const seconds = (now - then) / 1000;
+  if (seconds < 60) return 'just now'; // also covers future dates (clock skew)
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  if (seconds < 3600) return rtf.format(-Math.floor(seconds / 60), 'minute');
+  if (seconds < 86400) return rtf.format(-Math.floor(seconds / 3600), 'hour');
+  const days = Math.floor(seconds / 86400);
+  if (days < 30) return rtf.format(-days, 'day');
+  if (days < 365) return rtf.format(-Math.floor(days / 30), 'month');
+  return rtf.format(-Math.floor(days / 365), 'year');
+}
+
+// Distinct hosts (www stripped) of the linkable tabs in first-seen order, capped at `max`;
+// `more` counts the distinct hosts that did not fit.
+function hostSummary(tabs, max = 3) {
+  const seen = new Set();
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    if (tab && isLinkable(tab.url)) seen.add(getDomain(tab.url));
+  }
+  const all = [...seen];
+  return { hosts: all.slice(0, max), more: Math.max(0, all.length - max) };
+}
+
 // Returns the tab ids that closeDuplicates would remove, without touching tabs.
 function duplicateIdsToRemove(tabs) {
   const byUrl = new Map();
@@ -137,6 +165,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BLOCKED_SCHEMES, isRestorable, getDomain, getDateBucket, BUCKET_COLORS,
     TRACKING_PARAMS, dedupeKey, isLinkable, clampSleepHours, DEFAULT_SLEEP_HOURS,
-    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, sessionIdOf, duplicateIdsToRemove, runBatched
+    MAX_SAVED_SESSIONS, MAX_TABS_PER_SESSION, filterSessions, newSessionId, sessionIdOf, duplicateIdsToRemove, runBatched,
+    relativeTime, hostSummary
   };
 }

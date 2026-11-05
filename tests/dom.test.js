@@ -250,13 +250,14 @@ module.exports = async function main() {
     assert.strictEqual(dom.window.document.querySelector(`#${id} .shortcut`), null, id + ' has no suggested shortcut');
   }
 
-  // popup: preview counts render into the status line on open
+  // popup: preview counts render into the badges on open (the status line stays free for results)
   const previewStub = makeBrowserChromeStub();
   previewStub.runtime.sendMessage = async (msg) => msg.action === 'PREVIEW' ? { status: 'done', count: { duplicates: 3, idle: 2 } } : { status: 'done', count: 1 };
   dom = await loadPage('popup.html', ['error-report.js', 'logic.js', 'popup.js'], previewStub);
   await new Promise(r => setTimeout(r, 10));
-  const previewStatus = dom.window.document.getElementById('status');
-  assert.strictEqual(previewStatus.textContent, '3 duplicates · 2 idle tabs');
+  assert.strictEqual(dom.window.document.getElementById('status').textContent, '');
+  assert.strictEqual(dom.window.document.getElementById('badge-duplicates').textContent, '3');
+  assert.strictEqual(dom.window.document.getElementById('badge-idle').textContent, '2');
 
   // popup: View Saved Sessions opens the dashboard and closes the popup
   const viewStub = makeBrowserChromeStub();

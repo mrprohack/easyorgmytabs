@@ -6,6 +6,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
+const { assertMinFontSize } = require('./helpers');
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -115,11 +116,23 @@ async function main() {
     assert.strictEqual(await popup.locator('#btn-view-sessions .shortcut').textContent(), registeredShortcuts.VIEW_SESSIONS);
     assert.strictEqual(await popup.locator('#shortcut-warning').isHidden(), true, 'fresh-profile shortcuts are all assigned');
 
-    // Chrome action popups are capped at 600px high. Keep the natural content
-    // below that so the real toolbar popup does not need vertical scrolling.
+    // Preview badges fill in once the background answers PREVIEW.
+    await popup.waitForFunction(() => /^\d+$/.test(document.getElementById('badge-duplicates').textContent));
+
+    // Chrome action popups are capped at 600px high. The design budget is 560px so the
+    // real toolbar popup never needs vertical scrolling, even with a longer status line.
     const popupHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
-    assert.ok(popupHeight <= 600, `popup content is ${popupHeight}px high; keep it at or below 600px`);
+    assert.ok(popupHeight <= 560, `popup content is ${popupHeight}px high; keep it at or below 560px`);
     await assertShortcutLayout(popup);
+    await assertMinFontSize(popup, 'popup');
+
+    // The sleep-threshold field shows the shared focus ring (the shared .input rule must not switch it off).
+    await popup.locator('#sleep-hours').focus();
+    assert.deepStrictEqual(
+      await popup.locator('#sleep-hours').evaluate(el => { const s = getComputedStyle(el); return { style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; }),
+      { style: 'solid', width: '2px', color: 'rgb(99, 102, 241)' },
+      'focused sleep-threshold field shows the shared focus ring'
+    );
 
     // Pinned tabs are never eligible for organization or ungroup-all behavior.
     await popup.evaluate(async (targetUrl) => {
@@ -242,8 +255,9 @@ async function main() {
     // Recheck layout after state/copy changes so active/toggle styling cannot
     // reintroduce the shortcut overlap from the reported screenshot.
     await assertShortcutLayout(popup);
+    await assertMinFontSize(popup, 'popup after actions');
     const finalHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
-    assert.ok(finalHeight <= 600, `final popup content is ${finalHeight}px high; keep it at or below 600px`);
+    assert.ok(finalHeight <= 560, `final popup content is ${finalHeight}px high; keep it at or below 560px`);
 
     // Chrome's shortcut manager is a privileged chrome:// page. The extension
     // should keep the popup open and show the exact address rather than opening
@@ -256,7 +270,29 @@ async function main() {
       'Open chrome://extensions/shortcuts in the address bar to assign or change shortcuts.'
     );
 
-    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; active shortcuts verified; popup ${finalHeight}px high`);
+    // Worst case: shortcut-warning banner visible and a long, wrapping result line.
+    // The popup must still fit inside Chrome's 600px popup cap.
+    await popup.evaluate(() => {
+      const warning = document.getElementById('shortcut-warning');
+      warning.hidden = false;
+      warning.textContent = '2 keyboard shortcuts are not assigned in Chrome.';
+      document.getElementById('status').textContent =
+        'Regrouped 12 tabs into 4 groups by Website. 3 grouped tabs left unchanged. 1 pinned grouped tab left unchanged.';
+    });
+    const worstHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
+    assert.ok(worstHeight <= 600, `worst-case popup is ${worstHeight}px high; Chrome caps popups at 600px`);
+
+    // An unbroken hostname in a status message must wrap inside the bar, not overflow the 360px popup.
+    await popup.evaluate(() => {
+      document.getElementById('status').textContent = `Added ${'a'.repeat(60)}.${'b'.repeat(60)}.example to this session.`;
+    });
+    const statusFit = await popup.evaluate(() => {
+      const bar = document.getElementById('status');
+      return { scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth };
+    });
+    assert.ok(statusFit.scrollWidth <= statusFit.clientWidth, `a long unbroken status must wrap inside its bar: ${JSON.stringify(statusFit)}`);
+
+    console.log(`Chromium E2E passed: Regroup Off -> On -> Ungroup all; active shortcuts verified; popup ${finalHeight}px high (worst case ${worstHeight}px)`);
   } finally {
     if (context) await context.close();
     await new Promise(resolve => server.close(resolve));

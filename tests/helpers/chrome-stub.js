@@ -182,6 +182,9 @@ function makeBrowserChromeStub({ savedSessions = [], regroupAll = false } = {}) 
     },
     tabs: {
       async create({ url }) { stored._created = stored._created || []; stored._created.push(url); }
+    },
+    windows: {
+      async create({ url }) { stored._windows = stored._windows || []; stored._windows.push(url); }
     }
   };
 }

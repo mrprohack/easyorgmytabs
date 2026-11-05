@@ -6,6 +6,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
+const { assertMinFontSize } = require('./helpers');
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -62,7 +63,9 @@ async function main() {
         date: '2026-08-08T12:00:00.000Z',
         tabs: [
           { title: longTitle, url: `http://localhost:${port}/beta` },
-          { title: 'Gamma workspace', url: `http://127.0.0.1:${port}/gamma` }
+          { title: 'Gamma workspace', url: `http://127.0.0.1:${port}/gamma` },
+          // A very long hostname must be clipped in the host summary, never widen the page.
+          { title: 'Long host', url: `http://${'a'.repeat(50)}.${'b'.repeat(50)}.localhost:${port}/x` }
         ]
       }
     ];
@@ -77,7 +80,7 @@ async function main() {
     await dashboard.waitForFunction(() => document.querySelectorAll('article.session').length === 2);
 
     assert.strictEqual(await dashboard.locator('#session-count').textContent(), '2 sessions');
-    assert.strictEqual(await dashboard.locator('#tab-count').textContent(), '4 tabs');
+    assert.strictEqual(await dashboard.locator('#tab-count').textContent(), '5 tabs');
     await noHorizontalOverflow(dashboard, 'desktop dashboard');
 
     const cards = dashboard.locator('article.session');
@@ -86,6 +89,21 @@ async function main() {
     assert.ok(firstBox && secondBox, 'desktop session cards have layout boxes');
     assert.ok(Math.abs(firstBox.y - secondBox.y) <= 2, `desktop cards should share a row: ${firstBox.y} vs ${secondBox.y}`);
     assert.ok(Math.abs(firstBox.x - secondBox.x) > 20, 'desktop cards occupy separate columns');
+
+    // Card identity: the newest card is marked, hosts are summarised on one clipped line.
+    assert.strictEqual((await cards.nth(0).locator('.session-badge').textContent()).trim(), 'Latest');
+    assert.strictEqual(await cards.nth(1).locator('.session-badge').count(), 0);
+    assert.strictEqual(await cards.nth(0).locator('.session-hosts').isVisible(), true);
+    const hostsMetrics = await cards.nth(1).locator('.session-hosts').evaluate(el => ({
+      textOverflow: getComputedStyle(el).textOverflow,
+      whiteSpace: getComputedStyle(el).whiteSpace,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth
+    }));
+    assert.strictEqual(hostsMetrics.textOverflow, 'ellipsis');
+    assert.strictEqual(hostsMetrics.whiteSpace, 'nowrap');
+    assert.ok(hostsMetrics.scrollWidth > hostsMetrics.clientWidth, `a long host list is clipped, not wrapped: ${JSON.stringify(hostsMetrics)}`);
+    await assertMinFontSize(dashboard, 'dashboard 1100');
 
     // Search filters through the real dashboard and Clear restores both cards.
     await dashboard.locator('#search').fill('Gamma workspace');
@@ -99,15 +117,22 @@ async function main() {
 
     // Keyboard order follows action hierarchy: search -> primary restore, with a
     // visible focus outline supplied by :focus-visible.
+    const ringOf = (el) => { const s = getComputedStyle(el); return { style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; };
+    const sharedRing = { style: 'solid', width: '2px', color: 'rgb(99, 102, 241)' }; // the shared --accent focus ring, fully opaque
     await dashboard.locator('#search').focus();
+    // The search input draws no outline of its own, so its control carries the shared ring.
+    assert.deepStrictEqual(await dashboard.locator('.search-control').evaluate(ringOf), sharedRing, 'focused search shows the shared focus ring');
     await dashboard.keyboard.press('Tab');
     const focused = await dashboard.evaluate(() => ({
       className: document.activeElement?.className || '',
       text: document.activeElement?.textContent || ''
     }));
     assert.match(focused.className, /btn-session-primary/, `primary restore should follow search in keyboard order: ${JSON.stringify(focused)}`);
-    const outlineStyle = await dashboard.locator('.btn-session-primary').first().evaluate(el => getComputedStyle(el).outlineStyle);
-    assert.notStrictEqual(outlineStyle, 'none', 'keyboard-focused primary action has a visible focus outline');
+    // Read straight after Tab: the ring must be the opaque accent at once, not a translucent or animating outline.
+    assert.deepStrictEqual(await dashboard.locator('.btn-session-primary').first().evaluate(ringOf), sharedRing, 'keyboard-focused primary action shows the shared focus ring');
+    // Text fields too: the shared .input rule must not switch the ring off.
+    await cards.nth(0).locator('.add-link-form input').focus();
+    assert.deepStrictEqual(await cards.nth(0).locator('.add-link-form input').evaluate(ringOf), sharedRing, 'focused URL field shows the shared focus ring');
 
     // Restore here opens only the linkable tab from the first session.
     const newPagePromise = context.waitForEvent('page');
@@ -135,6 +160,7 @@ async function main() {
     await dashboard.setViewportSize({ width: 360, height: 780 });
     await dashboard.waitForTimeout(100);
     await noHorizontalOverflow(dashboard, '360px dashboard');
+    await assertMinFontSize(dashboard, 'dashboard 360');
 
     const mobileFirst = await cards.nth(0).boundingBox();
     const mobileSecond = await cards.nth(1).boundingBox();
@@ -144,6 +170,12 @@ async function main() {
     const longLink = dashboard.locator('.link').filter({ hasText: 'A very long saved tab title' }).first();
     const longMetrics = await longLink.evaluate(el => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
     assert.ok(longMetrics.scrollWidth >= longMetrics.clientWidth, 'long title is constrained inside its row');
+
+    // A long hostname also reaches the status line ("Added <host> to this session."); it must wrap, not widen the page.
+    await cards.nth(0).locator('.add-link-form input').fill(`http://${'a'.repeat(50)}.${'b'.repeat(50)}.example/x`);
+    await cards.nth(0).locator('.add-link-btn').click();
+    await dashboard.waitForFunction(() => /^Added /.test(document.getElementById('status')?.textContent || ''));
+    await noHorizontalOverflow(dashboard, '360px dashboard with a long hostname in the status line');
     await noHorizontalOverflow(dashboard, 'dashboard after long-title measurement');
 
     console.log('Chromium session dashboard E2E passed: responsive grid, search, keyboard hierarchy, restore, delete, and overflow safety');

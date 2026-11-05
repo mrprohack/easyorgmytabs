@@ -1,32 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tab Organizer</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body class="popup">
   <header class="popup-header">
     <div class="brand">
-      <img src="icon.svg" alt="Tab Organizer logo">
-      <div class="brand-copy">
-        <h1>Tab Organizer</h1>
-        <p>Clean tabs, your way.</p>
-      </div>
+      <img src="icon.svg" alt="" aria-hidden="true">
+      <h1>Tab Organizer</h1>
     </div>
+    <button id="btn-shortcuts-settings" class="shortcut-settings-btn" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1zM7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>
+      <span>Shortcuts</span>
+    </button>
   </header>
 
-  <section class="popup-card organize-card" aria-labelledby="organize-heading">
-    <div class="section-heading">
-      <div>
-        <span class="eyebrow">Organize</span>
-        <h2 id="organize-heading">Group tabs your way</h2>
-      </div>
-      <span id="organize-mode" class="mode-pill">Not organized</span>
-    </div>
+  <p id="shortcut-warning" class="shortcut-warning" role="status" aria-live="polite" hidden></p>
 
-    <p class="section-help">Keep existing groups, or turn on Regroup all to rebuild them before organizing.</p>
+  <section class="popup-section organize-section" aria-labelledby="organize-heading">
+    <header class="section-heading">
+      <span class="step-badge" aria-hidden="true">1</span>
+      <h2 id="organize-heading">Organize</h2>
+      <span class="scope-chip">This window</span>
+      <span id="organize-mode" class="mode-pill">Not organized</span>
+    </header>
+
+    <div class="organize-actions">
+      <button id="btn-date" class="btn organize-btn has-shortcut" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span class="action-label">By Date</span>
+        <span class="shortcut">Alt+Shift+D</span>
+      </button>
+
+      <button id="btn-website" class="btn organize-btn has-shortcut" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+        <span class="action-label">By Website</span>
+        <span class="shortcut">Alt+Shift+G</span>
+      </button>
+    </div>
 
     <div class="regroup-row">
       <div class="regroup-copy">
@@ -39,77 +54,72 @@
       </button>
     </div>
 
-    <div class="organize-actions">
-      <button id="btn-date" class="btn organize-btn has-shortcut" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <span class="action-label">By Date</span>
-        <span class="shortcut">Alt+Shift+D</span>
-      </button>
-
-      <button id="btn-website" class="btn organize-btn has-shortcut" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-        <span class="action-label">By Website</span>
-        <span class="shortcut">Alt+Shift+G</span>
-      </button>
-    </div>
-
-    <button id="btn-ungroup" class="btn btn-ungroup">
+    <button id="btn-ungroup" class="btn btn-ungroup" type="button" title="Remove every non-pinned tab from its group in this window">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h4v4H7zM13 13h4v4h-4zM4 17h5m6-10h5M9 9l6 6"/></svg>
       <span class="action-label">Ungroup all</span>
-      <span class="safe-label">Non-pinned groups</span>
     </button>
   </section>
 
-  <section class="popup-card utilities-card" aria-labelledby="tools-heading">
-    <div class="section-heading compact-heading">
-      <div>
-        <span class="eyebrow">Tools</span>
-        <h2 id="tools-heading">Clean, sleep &amp; save</h2>
+  <section class="popup-section tools-section" aria-labelledby="tools-heading">
+    <header class="section-heading">
+      <span class="step-badge" aria-hidden="true">2</span>
+      <h2 id="tools-heading">Clean up</h2>
+      <span class="scope-chip">This window</span>
+    </header>
+
+    <div class="tool-list">
+      <div class="tool-row">
+        <button id="btn-dedupe" class="btn tool-btn has-shortcut" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span class="action-label">Close Duplicates</span>
+          <span id="badge-duplicates" class="tool-badge" title="Duplicate tabs found in this window">–</span>
+          <span class="shortcut">Alt+Shift+K</span>
+        </button>
+      </div>
+
+      <div class="tool-row">
+        <button id="btn-sleep" class="btn tool-btn" type="button" title="Free memory by sleeping tabs that have been idle longer than the threshold">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          <span class="action-label">Sleep Idle Tabs</span>
+          <span id="badge-idle" class="tool-badge" title="Idle tabs that would be put to sleep">–</span>
+        </button>
+        <label class="threshold">after
+          <input id="sleep-hours" class="input" type="number" min="0.25" max="168" step="0.25" value="1" aria-label="Sleep tabs idle over (hours)">
+          h
+        </label>
       </div>
     </div>
 
-    <div class="tool-grid">
-      <button id="btn-dedupe" class="btn compact-tool has-shortcut">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        <span class="action-label">Duplicates</span>
-        <span class="shortcut">Alt+Shift+K</span>
-      </button>
-
-      <button id="btn-undo" class="btn compact-tool">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
-        <span class="action-label">Undo</span>
-      </button>
-
-      <button id="btn-sleep" class="btn compact-tool">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-        <span class="action-label">Sleep</span>
-      </button>
+    <div class="tool-list tool-list-secondary">
+      <div class="tool-row">
+        <button id="btn-undo" class="btn tool-btn" type="button" title="Reopen the most recently closed tab or window">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+          <span class="action-label">Undo Close</span>
+          <span class="tool-hint">Any window</span>
+        </button>
+      </div>
     </div>
+  </section>
 
-    <label class="setting inline-setting">
-      Sleep tabs idle over
-      <input id="sleep-hours" class="input" type="number" min="0.25" max="168" step="0.25" value="1">
-      hours
-    </label>
+  <section class="popup-section save-section" aria-labelledby="save-heading">
+    <header class="section-heading">
+      <span class="step-badge" aria-hidden="true">3</span>
+      <h2 id="save-heading">Save</h2>
+    </header>
 
     <div class="session-row">
-      <button id="btn-session" class="btn session-btn">
+      <button id="btn-session" class="btn session-btn" type="button" title="Save this window's tabs as a session (your tabs stay open)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
         <span class="action-label">Save Session</span>
       </button>
 
-      <button id="btn-view-sessions" class="btn session-btn has-shortcut">
+      <button id="btn-view-sessions" class="btn session-btn has-shortcut" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
         <span class="action-label">Saved Sessions</span>
         <span class="shortcut">Alt+Shift+S</span>
       </button>
     </div>
   </section>
-
-  <div class="shortcut-health" aria-label="Keyboard shortcut settings">
-    <p id="shortcut-warning" class="shortcut-warning" role="status" aria-live="polite" hidden></p>
-    <button id="btn-shortcuts-settings" class="shortcut-settings-btn" type="button">Keyboard shortcuts</button>
-  </div>
 
   <p id="status" class="status" role="status" aria-live="polite"></p>
 
